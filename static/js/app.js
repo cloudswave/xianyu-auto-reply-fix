@@ -12323,11 +12323,37 @@ const DEFAULT_VERSION = 'v1.0.0';
 // 当前本地版本号（动态从 version.txt 读取）
 let LOCAL_VERSION = DEFAULT_VERSION;
 
-// 远程版本检查API地址（请修改为您的PHP地址）
-const VERSION_CHECK_URL = 'http://116.196.116.76/version.php';
+// 远程版本检查API地址（暂时禁用）
+// const VERSION_CHECK_URL = 'http://116.196.116.76/version.php';
 
 // 缓存远程版本信息
 let remoteVersionInfo = null;
+
+// 本地版本历史（远程服务禁用时使用）
+const LOCAL_VERSION_HISTORY = {
+    version: 'v1.1.0',
+    intro: '此版本为本人利用业余时间开发，功能可能不完善，欢迎大家提出建议和bug，我会尽快修复。此版本纯粹免费，没有任何收费项目，请大家放心使用。',
+    versionHistory: [
+        {
+            version: 'v1.1.0',
+            date: '2025-01-25',
+            updates: [
+                '添加登录页面验证码开关功能',
+                '优化订单管理功能（批量刷新、状态筛选）',
+                '添加手动发货和刷新订单状态功能',
+                '完善双规格自动发货功能',
+                '过滤买家订单，只显示卖家订单'
+            ]
+        },
+        {
+            version: 'v1.0.9.3',
+            date: '2025-01-24',
+            updates: [
+                '初始版本：闲鱼自动回复系统'
+            ]
+        }
+    ]
+};
 
 /**
  * 加载系统版本号并检查更新
@@ -12357,38 +12383,41 @@ async function loadSystemVersion() {
             systemVersionBadge.onclick = () => showVersionInfo(LOCAL_VERSION);
         }
 
-        // 从远程PHP获取版本信息
-        try {
-            const response = await fetch(VERSION_CHECK_URL, {
-                method: 'GET',
-                headers: {
-                    'Accept': 'application/json'
-                }
-            });
-            
-            if (!response.ok) {
-                console.warn('版本检查请求失败:', response.status);
-                return;
-            }
-            
-            const result = await response.json();
-            
-            if (result.error || !result.success) {
-                console.warn('版本检查返回错误:', result.message);
-                return;
-            }
-            
-            // 缓存远程版本信息
-            remoteVersionInfo = result.data;
-            
-            // 检查是否有更新（版本号不一致）
-            if (remoteVersionInfo.version && remoteVersionInfo.version !== LOCAL_VERSION) {
-                showUpdateAvailable(remoteVersionInfo.version);
-            }
-            
-        } catch (fetchError) {
-            console.warn('无法连接版本检查服务器:', fetchError.message);
-        }
+        // 从远程PHP获取版本信息（暂时禁用）
+        // try {
+        //     const response = await fetch(VERSION_CHECK_URL, {
+        //         method: 'GET',
+        //         headers: {
+        //             'Accept': 'application/json'
+        //         }
+        //     });
+        //
+        //     if (!response.ok) {
+        //         console.warn('版本检查请求失败:', response.status);
+        //         return;
+        //     }
+        //
+        //     const result = await response.json();
+        //
+        //     if (result.error || !result.success) {
+        //         console.warn('版本检查返回错误:', result.message);
+        //         return;
+        //     }
+        //
+        //     // 缓存远程版本信息
+        //     remoteVersionInfo = result.data;
+        //
+        //     // 检查是否有更新（版本号不一致）
+        //     if (remoteVersionInfo.version && remoteVersionInfo.version !== LOCAL_VERSION) {
+        //         showUpdateAvailable(remoteVersionInfo.version);
+        //     }
+        //
+        // } catch (fetchError) {
+        //     console.warn('无法连接版本检查服务器:', fetchError.message);
+        // }
+
+        // 使用本地版本历史
+        remoteVersionInfo = LOCAL_VERSION_HISTORY;
 
     } catch (error) {
         console.error('版本加载失败:', error);
@@ -12397,72 +12426,76 @@ async function loadSystemVersion() {
 }
 
 /**
- * 显示有更新标签
+ * 显示有更新标签（暂时禁用）
  */
-function showUpdateAvailable(newVersion) {
-    const versionContainer = document.querySelector('.version-info');
-
-    if (!versionContainer) {
-        return;
-    }
-
-    // 检查是否已经有更新标签
-    if (versionContainer.querySelector('.update-badge')) {
-        return;
-    }
-
-    // 创建更新标签
-    const updateBadge = document.createElement('span');
-    updateBadge.className = 'badge bg-warning ms-2 update-badge';
-    updateBadge.style.cursor = 'pointer';
-    updateBadge.innerHTML = '<i class="bi bi-arrow-up-circle me-1"></i>有更新';
-    updateBadge.title = `新版本 ${newVersion} 可用，点击查看更新内容`;
-
-    // 点击事件
-    updateBadge.onclick = () => showUpdateInfo(newVersion);
-
-    // 添加到版本信息容器
-    versionContainer.appendChild(updateBadge);
-}
+// function showUpdateAvailable(newVersion) {
+//     const versionContainer = document.querySelector('.version-info');
+//
+//     if (!versionContainer) {
+//         return;
+//     }
+//
+//     // 检查是否已经有更新标签
+//     if (versionContainer.querySelector('.update-badge')) {
+//         return;
+//     }
+//
+//     // 创建更新标签
+//     const updateBadge = document.createElement('span');
+//     updateBadge.className = 'badge bg-warning ms-2 update-badge';
+//     updateBadge.style.cursor = 'pointer';
+//     updateBadge.innerHTML = '<i class="bi bi-arrow-up-circle me-1"></i>有更新';
+//     updateBadge.title = `新版本 ${newVersion} 可用，点击查看更新内容`;
+//
+//     // 点击事件
+//     updateBadge.onclick = () => showUpdateInfo(newVersion);
+//
+//     // 添加到版本信息容器
+//     versionContainer.appendChild(updateBadge);
+// }
 
 /**
- * 获取更新信息（使用缓存或重新请求）
+ * 获取更新信息（使用缓存或本地版本历史）
  */
 async function getUpdateInfo() {
     // 如果已有缓存的远程版本信息，直接使用
     if (remoteVersionInfo) {
         return remoteVersionInfo;
     }
-    
-    // 否则重新请求
-    try {
-        const response = await fetch(VERSION_CHECK_URL, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json'
-            }
-        });
-        
-        if (!response.ok) {
-            showToast('获取更新信息失败: 网络错误', 'danger');
-            return null;
-        }
-        
-        const result = await response.json();
 
-        if (result.error || !result.success) {
-            showToast('获取更新信息失败: ' + (result.message || '未知错误'), 'danger');
-            return null;
-        }
+    // 使用本地版本历史（远程服务暂时禁用）
+    remoteVersionInfo = LOCAL_VERSION_HISTORY;
+    return remoteVersionInfo;
 
-        remoteVersionInfo = result.data;
-        return remoteVersionInfo;
-
-    } catch (error) {
-        console.error('获取更新信息失败:', error);
-        showToast('获取更新信息失败: ' + error.message, 'danger');
-        return null;
-    }
+    // 远程请求代码（暂时禁用）
+    // try {
+    //     const response = await fetch(VERSION_CHECK_URL, {
+    //         method: 'GET',
+    //         headers: {
+    //             'Accept': 'application/json'
+    //         }
+    //     });
+    //
+    //     if (!response.ok) {
+    //         showToast('获取更新信息失败: 网络错误', 'danger');
+    //         return null;
+    //     }
+    //
+    //     const result = await response.json();
+    //
+    //     if (result.error || !result.success) {
+    //         showToast('获取更新信息失败: ' + (result.message || '未知错误'), 'danger');
+    //         return null;
+    //     }
+    //
+    //     remoteVersionInfo = result.data;
+    //     return remoteVersionInfo;
+    //
+    // } catch (error) {
+    //     console.error('获取更新信息失败:', error);
+    //     showToast('获取更新信息失败: ' + error.message, 'danger');
+    //     return null;
+    // }
 }
 
 /**
@@ -12730,43 +12763,47 @@ async function showBenefitsModal() {
 }
 
 /**
- * 获取权益信息（使用缓存或重新请求）
+ * 获取权益信息（使用缓存或本地版本历史）
  */
 async function getBenefitsInfo() {
     // 如果已有缓存的远程版本信息并包含权益，直接使用
     if (remoteVersionInfo && remoteVersionInfo.benefits) {
         return remoteVersionInfo;
     }
-    
-    // 否则重新请求
-    try {
-        const response = await fetch(VERSION_CHECK_URL, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json'
-            }
-        });
-        
-        if (!response.ok) {
-            showToast('获取权益信息失败: 网络错误', 'danger');
-            return null;
-        }
-        
-        const result = await response.json();
-        
-        if (result.error || !result.success) {
-            showToast('获取权益信息失败: ' + (result.message || '未知错误'), 'danger');
-            return null;
-        }
-        
-        remoteVersionInfo = result.data;
-        return remoteVersionInfo;
-        
-    } catch (error) {
-        console.error('获取权益信息失败:', error);
-        showToast('获取权益信息失败: ' + error.message, 'danger');
-        return null;
-    }
+
+    // 使用本地版本历史（远程服务暂时禁用）
+    remoteVersionInfo = LOCAL_VERSION_HISTORY;
+    return remoteVersionInfo;
+
+    // 远程请求代码（暂时禁用）
+    // try {
+    //     const response = await fetch(VERSION_CHECK_URL, {
+    //         method: 'GET',
+    //         headers: {
+    //             'Accept': 'application/json'
+    //         }
+    //     });
+    //
+    //     if (!response.ok) {
+    //         showToast('获取权益信息失败: 网络错误', 'danger');
+    //         return null;
+    //     }
+    //
+    //     const result = await response.json();
+    //
+    //     if (result.error || !result.success) {
+    //         showToast('获取权益信息失败: ' + (result.message || '未知错误'), 'danger');
+    //         return null;
+    //     }
+    //
+    //     remoteVersionInfo = result.data;
+    //     return remoteVersionInfo;
+    //
+    // } catch (error) {
+    //     console.error('获取权益信息失败:', error);
+    //     showToast('获取权益信息失败: ' + error.message, 'danger');
+    //     return null;
+    // }
 }
 
 // =============================================================================
