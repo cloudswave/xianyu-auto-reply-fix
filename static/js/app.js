@@ -12763,7 +12763,7 @@ async function showBenefitsModal() {
 }
 
 /**
- * 获取权益信息（使用缓存或本地版本历史）
+ * 获取权益信息（使用缓存或重新请求）
  */
 async function getBenefitsInfo() {
     // 如果已有缓存的远程版本信息并包含权益，直接使用
@@ -12771,39 +12771,35 @@ async function getBenefitsInfo() {
         return remoteVersionInfo;
     }
 
-    // 使用本地版本历史（远程服务暂时禁用）
-    remoteVersionInfo = LOCAL_VERSION_HISTORY;
-    return remoteVersionInfo;
+    // 从远程获取权益信息
+    try {
+        const response = await fetch('http://116.196.116.76/version.php', {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
 
-    // 远程请求代码（暂时禁用）
-    // try {
-    //     const response = await fetch(VERSION_CHECK_URL, {
-    //         method: 'GET',
-    //         headers: {
-    //             'Accept': 'application/json'
-    //         }
-    //     });
-    //
-    //     if (!response.ok) {
-    //         showToast('获取权益信息失败: 网络错误', 'danger');
-    //         return null;
-    //     }
-    //
-    //     const result = await response.json();
-    //
-    //     if (result.error || !result.success) {
-    //         showToast('获取权益信息失败: ' + (result.message || '未知错误'), 'danger');
-    //         return null;
-    //     }
-    //
-    //     remoteVersionInfo = result.data;
-    //     return remoteVersionInfo;
-    //
-    // } catch (error) {
-    //     console.error('获取权益信息失败:', error);
-    //     showToast('获取权益信息失败: ' + error.message, 'danger');
-    //     return null;
-    // }
+        if (!response.ok) {
+            showToast('获取权益信息失败: 网络错误', 'danger');
+            return null;
+        }
+
+        const result = await response.json();
+
+        if (result.error || !result.success) {
+            showToast('获取权益信息失败: ' + (result.message || '未知错误'), 'danger');
+            return null;
+        }
+
+        remoteVersionInfo = result.data;
+        return remoteVersionInfo;
+
+    } catch (error) {
+        console.error('获取权益信息失败:', error);
+        showToast('获取权益信息失败: ' + error.message, 'danger');
+        return null;
+    }
 }
 
 // =============================================================================
