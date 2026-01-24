@@ -307,11 +307,44 @@
     const errorMessage = document.getElementById('errorMessage');
     const loading = document.querySelector('.loading');
     const loginText = document.getElementById('loginText');
-    
+
     // 安全验证码相关变量
     let securityCaptchaId = null;
     let emailSecurityCaptchaId = null;
-    let securityCaptchaRequired = true;  // 每次登录都需要验证码
+    let securityCaptchaRequired = true;  // 默认需要验证码，会通过API检查
+    let loginCaptchaEnabled = true;  // 登录验证码是否启用
+
+    // 检查登录验证码是否启用
+    async function checkLoginCaptchaEnabled() {
+      try {
+        const response = await fetch('/api/login-captcha-enabled');
+        const result = await response.json();
+        loginCaptchaEnabled = result.enabled;
+        securityCaptchaRequired = result.enabled;
+
+        // 根据设置显示或隐藏验证码区域
+        const securityCaptchaSection = document.getElementById('securityCaptchaSection');
+        const emailSecurityCaptchaSection = document.getElementById('emailSecurityCaptchaSection');
+
+        if (!loginCaptchaEnabled) {
+          if (securityCaptchaSection) securityCaptchaSection.style.display = 'none';
+          if (emailSecurityCaptchaSection) emailSecurityCaptchaSection.style.display = 'none';
+        } else {
+          // 根据当前登录方式显示验证码
+          const loginType = document.querySelector('input[name="loginType"]:checked')?.value;
+          if (loginType === 'username' && securityCaptchaSection) {
+            securityCaptchaSection.style.display = 'block';
+          } else if (loginType === 'email-password' && emailSecurityCaptchaSection) {
+            emailSecurityCaptchaSection.style.display = 'block';
+          }
+        }
+
+        return loginCaptchaEnabled;
+      } catch (error) {
+        console.error('检查登录验证码状态失败:', error);
+        return true; // 出错时默认需要验证码
+      }
+    }
     
     function showError(message) {
       errorMessage.textContent = message;
@@ -474,19 +507,18 @@
             return;
           }
 
-          // 添加验证码数据
-          const captchaCode = document.getElementById('securityCaptchaCode').value.trim();
-          if (!captchaCode) {
-            showError('请输入验证码');
-            return;
+          loginData = { username, password };
+
+          // 只有在验证码启用时才验证
+          if (loginCaptchaEnabled) {
+            const captchaCode = document.getElementById('securityCaptchaCode').value.trim();
+            if (!captchaCode) {
+              showError('请输入验证码');
+              return;
+            }
+            loginData.captcha_id = securityCaptchaId;
+            loginData.captcha_code = captchaCode;
           }
-          
-          loginData = { 
-            username, 
-            password,
-            captcha_id: securityCaptchaId,
-            captcha_code: captchaCode
-          };
           
         } else if (loginType === 'email-password') {
           const email = document.getElementById('emailForPassword').value;
@@ -502,19 +534,18 @@
             return;
           }
 
-          // 添加验证码数据
-          const emailCaptchaCode = document.getElementById('emailSecurityCaptchaCode').value.trim();
-          if (!emailCaptchaCode) {
-            showError('请输入验证码');
-            return;
+          loginData = { email, password };
+
+          // 只有在验证码启用时才验证
+          if (loginCaptchaEnabled) {
+            const emailCaptchaCode = document.getElementById('emailSecurityCaptchaCode').value.trim();
+            if (!emailCaptchaCode) {
+              showError('请输入验证码');
+              return;
+            }
+            loginData.captcha_id = emailSecurityCaptchaId;
+            loginData.captcha_code = emailCaptchaCode;
           }
-          
-          loginData = { 
-            email, 
-            password,
-            captcha_id: emailSecurityCaptchaId,
-            captcha_code: emailCaptchaCode
-          };
           
         } else if (loginType === 'email-code') {
           const email = document.getElementById('emailForCode').value;
@@ -578,12 +609,14 @@
           }
         } else {
           showError(result.message);
-          
-          // 登录失败，刷新验证码
-          if (loginType === 'username') {
-            refreshSecurityCaptcha();
-          } else if (loginType === 'email-password') {
-            refreshEmailSecurityCaptcha();
+
+          // 登录失败，刷新验证码（仅在验证码启用时）
+          if (loginCaptchaEnabled) {
+            if (loginType === 'username') {
+              refreshSecurityCaptcha();
+            } else if (loginType === 'email-password') {
+              refreshEmailSecurityCaptcha();
+            }
           }
         }
       } catch (error) {
@@ -634,13 +667,27 @@
         section.style.display = 'none';
       });
 
-      // 显示对应表单并加载验证码
+      // 显示对应表单并加载验证码（仅在验证码启用时）
       if (loginType === 'username') {
         document.getElementById('usernameLoginForm').style.display = 'block';
-        loadSecurityCaptcha();
+        // 根据验证码设置显示/隐藏验证码区域
+        const securityCaptchaSection = document.getElementById('securityCaptchaSection');
+        if (loginCaptchaEnabled) {
+          securityCaptchaSection.style.display = 'block';
+          loadSecurityCaptcha();
+        } else {
+          securityCaptchaSection.style.display = 'none';
+        }
       } else if (loginType === 'email-password') {
         document.getElementById('emailPasswordLoginForm').style.display = 'block';
-        loadEmailSecurityCaptcha();
+        // 根据验证码设置显示/隐藏验证码区域
+        const emailSecurityCaptchaSection = document.getElementById('emailSecurityCaptchaSection');
+        if (loginCaptchaEnabled) {
+          emailSecurityCaptchaSection.style.display = 'block';
+          loadEmailSecurityCaptcha();
+        } else {
+          emailSecurityCaptchaSection.style.display = 'none';
+        }
       } else if (loginType === 'email-code') {
         document.getElementById('emailCodeLoginForm').style.display = 'block';
         // 每次切换到邮箱验证码登录时都加载验证码
@@ -868,15 +915,20 @@
     }
 
     // 事件监听器
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', async function() {
       // 检查注册状态
       checkRegistrationStatus();
 
       // 检查默认登录信息显示状态
       checkLoginInfoStatus();
-      
-      // 页面加载时就加载登录验证码（用户名登录是默认选中的）
-      loadSecurityCaptcha();
+
+      // 检查登录验证码是否启用
+      await checkLoginCaptchaEnabled();
+
+      // 如果验证码启用，加载登录验证码（用户名登录是默认选中的）
+      if (loginCaptchaEnabled) {
+        loadSecurityCaptcha();
+      }
 
       // 登录方式切换
       document.querySelectorAll('input[name="loginType"]').forEach(radio => {

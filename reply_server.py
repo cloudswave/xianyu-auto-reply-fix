@@ -972,20 +972,27 @@ async def login(login_request: LoginRequest, request: Request):
                 captcha_required=True
             )
     
-    # 每次登录都需要验证码
-    captcha_valid, captcha_error = verify_login_captcha(
-        login_request.captcha_id,
-        login_request.captcha_code,
-        client_ip
-    )
-    if not captcha_valid:
-        logger.warning(f"🔢 IP {client_ip} 验证码验证失败: {captcha_error}")
-        return LoginResponse(
-            success=False,
-            message=captcha_error,
-            captcha_required=True
+    # 检查是否需要验证码
+    captcha_enabled_str = db_manager.get_system_setting('login_captcha_enabled')
+    captcha_enabled = captcha_enabled_str == 'true' if captcha_enabled_str is not None else True
+
+    if captcha_enabled:
+        # 验证码已开启，需要验证
+        captcha_valid, captcha_error = verify_login_captcha(
+            login_request.captcha_id,
+            login_request.captcha_code,
+            client_ip
         )
-    logger.info(f"🔢 IP {client_ip} 验证码验证成功")
+        if not captcha_valid:
+            logger.warning(f"🔢 IP {client_ip} 验证码验证失败: {captcha_error}")
+            return LoginResponse(
+                success=False,
+                message=captcha_error,
+                captcha_required=True
+            )
+        logger.info(f"🔢 IP {client_ip} 验证码验证成功")
+    else:
+        logger.info(f"🔢 IP {client_ip} 登录验证码已关闭，跳过验证")
 
     # 判断登录方式
     if login_request.username and login_request.password:
@@ -3517,6 +3524,67 @@ def update_login_info_settings(setting_data: LoginInfoSettingUpdate, admin_user:
     except Exception as e:
         logger.error(f"更新登录信息显示设置失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get('/login-captcha-settings')
+def get_login_captcha_settings(admin_user: Dict[str, Any] = Depends(require_admin)):
+    """获取登录验证码设置（仅管理员）"""
+    from db_manager import db_manager
+    try:
+        enabled_str = db_manager.get_system_setting('login_captcha_enabled')
+        logger.debug(f"从数据库获取的登录验证码设置值: '{enabled_str}'")
+
+        # 如果设置不存在，默认为开启
+        if enabled_str is None:
+            enabled_bool = True
+        else:
+            enabled_bool = enabled_str == 'true'
+
+        return {"enabled": enabled_bool}
+    except Exception as e:
+        logger.error(f"获取登录验证码设置失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put('/login-captcha-settings')
+def update_login_captcha_settings(setting_data: LoginInfoSettingUpdate, admin_user: Dict[str, Any] = Depends(require_admin)):
+    """更新登录验证码设置（仅管理员）"""
+    from db_manager import db_manager
+    try:
+        enabled = setting_data.enabled
+        success = db_manager.set_system_setting(
+            'login_captcha_enabled',
+            'true' if enabled else 'false',
+            '是否开启登录验证码'
+        )
+        if success:
+            log_with_user('info', f"更新登录验证码设置: {'开启' if enabled else '关闭'}", admin_user)
+            return {
+                'success': True,
+                'enabled': enabled,
+                'message': f"登录验证码已{'开启' if enabled else '关闭'}"
+            }
+        else:
+            raise HTTPException(status_code=500, detail='更新登录验证码设置失败')
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"更新登录验证码设置失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# 公开接口：获取登录验证码是否启用（供登录页面使用）
+@app.get('/api/login-captcha-enabled')
+def get_login_captcha_enabled():
+    """获取登录验证码是否启用（公开接口，供登录页面判断）"""
+    from db_manager import db_manager
+    try:
+        enabled_str = db_manager.get_system_setting('login_captcha_enabled')
+        enabled_bool = enabled_str == 'true' if enabled_str is not None else True
+        return {"enabled": enabled_bool}
+    except Exception as e:
+        logger.error(f"获取登录验证码设置失败: {e}")
+        return {"enabled": True}  # 出错时默认开启验证码
 
 
 

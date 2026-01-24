@@ -9639,9 +9639,17 @@ async function loadLoginInfoSettings() {
         if (response.ok) {
             const settings = await response.json();
             const checkbox = document.getElementById('showDefaultLoginInfo');
+            const captchaCheckbox = document.getElementById('loginCaptchaEnabled');
 
             if (checkbox && settings.show_default_login_info !== undefined) {
                 checkbox.checked = settings.show_default_login_info === 'true';
+            }
+
+            if (captchaCheckbox && settings.login_captcha_enabled !== undefined) {
+                captchaCheckbox.checked = settings.login_captcha_enabled === 'true';
+            } else if (captchaCheckbox) {
+                // 默认开启
+                captchaCheckbox.checked = true;
             }
         }
     } catch (error) {
@@ -9653,43 +9661,68 @@ async function loadLoginInfoSettings() {
 // 更新默认登录信息设置
 async function updateLoginInfoSettings() {
     const checkbox = document.getElementById('showDefaultLoginInfo');
+    const captchaCheckbox = document.getElementById('loginCaptchaEnabled');
     const statusDiv = document.getElementById('loginInfoStatus');
     const statusText = document.getElementById('loginInfoStatusText');
 
-    if (!checkbox) return;
-
-    const enabled = checkbox.checked;
-
     try {
-        const response = await fetch('/login-info-settings', {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${authToken}`
-            },
-            body: JSON.stringify({
-                enabled: enabled
-            })
-        });
+        let messages = [];
 
-        if (response.ok) {
-            const data = await response.json();
-            const message = enabled ? '默认登录信息显示已开启' : '默认登录信息显示已关闭';
-            showToast(message, 'success');
+        // 更新显示默认登录信息设置
+        if (checkbox) {
+            const enabled = checkbox.checked;
+            const response = await fetch('/login-info-settings', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`
+                },
+                body: JSON.stringify({ enabled: enabled })
+            });
 
-            // 显示状态信息
-            if (statusDiv && statusText) {
-                statusText.textContent = message;
-                statusDiv.style.display = 'block';
-
-                // 3秒后隐藏状态信息
-                setTimeout(() => {
-                    statusDiv.style.display = 'none';
-                }, 3000);
+            if (response.ok) {
+                messages.push(enabled ? '默认登录信息显示已开启' : '默认登录信息显示已关闭');
+            } else {
+                const errorData = await response.json();
+                showToast(`更新默认登录信息设置失败: ${errorData.detail || '未知错误'}`, 'danger');
+                return;
             }
-        } else {
-            const errorData = await response.json();
-            showToast(`更新失败: ${errorData.detail || '未知错误'}`, 'danger');
+        }
+
+        // 更新登录验证码设置
+        if (captchaCheckbox) {
+            const captchaEnabled = captchaCheckbox.checked;
+            const captchaResponse = await fetch('/login-captcha-settings', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`
+                },
+                body: JSON.stringify({ enabled: captchaEnabled })
+            });
+
+            if (captchaResponse.ok) {
+                messages.push(captchaEnabled ? '登录验证码已开启' : '登录验证码已关闭');
+            } else {
+                const errorData = await captchaResponse.json();
+                showToast(`更新登录验证码设置失败: ${errorData.detail || '未知错误'}`, 'danger');
+                return;
+            }
+        }
+
+        // 显示成功消息
+        const message = messages.join('，');
+        showToast('设置保存成功', 'success');
+
+        // 显示状态信息
+        if (statusDiv && statusText) {
+            statusText.textContent = message;
+            statusDiv.style.display = 'block';
+
+            // 3秒后隐藏状态信息
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 3000);
         }
     } catch (error) {
         console.error('更新登录信息设置失败:', error);
