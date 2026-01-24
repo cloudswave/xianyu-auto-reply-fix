@@ -4658,8 +4658,15 @@ def create_card(card_data: dict, current_user: Dict[str, Any] = Depends(get_curr
 
         log_with_user('info', f"创建卡券: {card_name}", current_user)
 
-        # 验证多规格字段
+        # 调试日志：记录接收到的多规格数据
         is_multi_spec = card_data.get('is_multi_spec', False)
+        logger.info(f"[DEBUG] 创建卡券 - is_multi_spec: {is_multi_spec}")
+        logger.info(f"[DEBUG] 创建卡券 - spec_name: {card_data.get('spec_name')}")
+        logger.info(f"[DEBUG] 创建卡券 - spec_value: {card_data.get('spec_value')}")
+        logger.info(f"[DEBUG] 创建卡券 - spec_name_2: {card_data.get('spec_name_2')}")
+        logger.info(f"[DEBUG] 创建卡券 - spec_value_2: {card_data.get('spec_value_2')}")
+
+        # 验证多规格字段
         if is_multi_spec:
             if not card_data.get('spec_name') or not card_data.get('spec_value'):
                 raise HTTPException(status_code=400, detail="多规格卡券必须提供规格名称和规格值")
@@ -4677,6 +4684,8 @@ def create_card(card_data: dict, current_user: Dict[str, Any] = Depends(get_curr
             is_multi_spec=is_multi_spec,
             spec_name=card_data.get('spec_name') if is_multi_spec else None,
             spec_value=card_data.get('spec_value') if is_multi_spec else None,
+            spec_name_2=card_data.get('spec_name_2') if is_multi_spec else None,
+            spec_value_2=card_data.get('spec_value_2') if is_multi_spec else None,
             user_id=user_id
         )
 
@@ -4707,8 +4716,16 @@ def update_card(card_id: int, card_data: dict, current_user: Dict[str, Any] = De
     """更新卡券"""
     try:
         from db_manager import db_manager
-        # 验证多规格字段
+
+        # 调试日志：记录接收到的多规格数据
         is_multi_spec = card_data.get('is_multi_spec')
+        logger.info(f"[DEBUG] 更新卡券 {card_id} - is_multi_spec: {is_multi_spec}")
+        logger.info(f"[DEBUG] 更新卡券 {card_id} - spec_name: {card_data.get('spec_name')}")
+        logger.info(f"[DEBUG] 更新卡券 {card_id} - spec_value: {card_data.get('spec_value')}")
+        logger.info(f"[DEBUG] 更新卡券 {card_id} - spec_name_2: {card_data.get('spec_name_2')}")
+        logger.info(f"[DEBUG] 更新卡券 {card_id} - spec_value_2: {card_data.get('spec_value_2')}")
+
+        # 验证多规格字段
         if is_multi_spec:
             if not card_data.get('spec_name') or not card_data.get('spec_value'):
                 raise HTTPException(status_code=400, detail="多规格卡券必须提供规格名称和规格值")
@@ -4726,7 +4743,9 @@ def update_card(card_id: int, card_data: dict, current_user: Dict[str, Any] = De
             delay_seconds=card_data.get('delay_seconds'),
             is_multi_spec=is_multi_spec,
             spec_name=card_data.get('spec_name'),
-            spec_value=card_data.get('spec_value')
+            spec_value=card_data.get('spec_value'),
+            spec_name_2=card_data.get('spec_name_2'),
+            spec_value_2=card_data.get('spec_value_2')
         )
         if success:
             return {"message": "卡券更新成功"}
@@ -4748,6 +4767,8 @@ async def update_card_with_image(
     is_multi_spec: bool = Form(default=False),
     spec_name: str = Form(default=""),
     spec_value: str = Form(default=""),
+    spec_name_2: str = Form(default=""),
+    spec_value_2: str = Form(default=""),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """更新带图片的卡券"""
@@ -4788,7 +4809,9 @@ async def update_card_with_image(
             delay_seconds=delay_seconds,
             is_multi_spec=is_multi_spec,
             spec_name=spec_name if is_multi_spec else None,
-            spec_value=spec_value if is_multi_spec else None
+            spec_value=spec_value if is_multi_spec else None,
+            spec_name_2=spec_name_2 if is_multi_spec else None,
+            spec_value_2=spec_value_2 if is_multi_spec else None
         )
 
         if success:

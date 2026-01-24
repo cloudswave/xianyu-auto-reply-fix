@@ -209,6 +209,8 @@ class DBManager:
                 is_multi_spec BOOLEAN DEFAULT FALSE,
                 spec_name TEXT,
                 spec_value TEXT,
+                spec_name_2 TEXT,
+                spec_value_2 TEXT,
                 user_id INTEGER NOT NULL DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -225,6 +227,8 @@ class DBManager:
                 sid TEXT,
                 spec_name TEXT,
                 spec_value TEXT,
+                spec_name_2 TEXT,
+                spec_value_2 TEXT,
                 quantity TEXT,
                 amount TEXT,
                 order_status TEXT DEFAULT 'unknown',
@@ -550,6 +554,8 @@ class DBManager:
                         is_multi_spec BOOLEAN DEFAULT FALSE,
                         spec_name TEXT,
                         spec_value TEXT,
+                        spec_name_2 TEXT,
+                        spec_value_2 TEXT,
                         user_id INTEGER NOT NULL DEFAULT 1,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -557,14 +563,14 @@ class DBManager:
                     )
                     ''')
 
-                    # 2. 复制数据
+                    # 2. 复制数据（双规格字段设为NULL，由后续迁移填充）
                     cursor.execute('''
                     INSERT INTO cards_new (id, name, type, api_config, text_content, data_content, image_url,
                                           description, enabled, delay_seconds, is_multi_spec, spec_name, spec_value,
-                                          user_id, created_at, updated_at)
+                                          spec_name_2, spec_value_2, user_id, created_at, updated_at)
                     SELECT id, name, type, api_config, text_content, data_content, image_url,
                            description, enabled, delay_seconds, is_multi_spec, spec_name, spec_value,
-                           user_id, created_at, updated_at
+                           NULL, NULL, user_id, created_at, updated_at
                     FROM cards
                     ''')
 
@@ -752,6 +758,24 @@ class DBManager:
                     self._execute_sql(cursor, "ALTER TABLE cards ADD COLUMN spec_name TEXT")
                     self._execute_sql(cursor, "ALTER TABLE cards ADD COLUMN spec_value TEXT")
                     logger.info("为cards表添加多规格字段")
+
+                # 为cards表添加双规格字段（如果不存在）
+                try:
+                    self._execute_sql(cursor, "SELECT spec_name_2 FROM cards LIMIT 1")
+                except sqlite3.OperationalError:
+                    # 双规格字段不存在，需要添加
+                    self._execute_sql(cursor, "ALTER TABLE cards ADD COLUMN spec_name_2 TEXT")
+                    self._execute_sql(cursor, "ALTER TABLE cards ADD COLUMN spec_value_2 TEXT")
+                    logger.info("为cards表添加双规格字段(spec_name_2, spec_value_2)")
+
+                # 为orders表添加双规格字段（如果不存在）
+                try:
+                    self._execute_sql(cursor, "SELECT spec_name_2 FROM orders LIMIT 1")
+                except sqlite3.OperationalError:
+                    # 双规格字段不存在，需要添加
+                    self._execute_sql(cursor, "ALTER TABLE orders ADD COLUMN spec_name_2 TEXT")
+                    self._execute_sql(cursor, "ALTER TABLE orders ADD COLUMN spec_value_2 TEXT")
+                    logger.info("为orders表添加双规格字段(spec_name_2, spec_value_2)")
 
                 # 为item_info表添加多规格字段（如果不存在）
                 try:
@@ -3318,8 +3342,15 @@ class DBManager:
                    text_content: str = None, data_content: str = None, image_url: str = None,
                    description: str = None, enabled: bool = True, delay_seconds: int = 0,
                    is_multi_spec: bool = False, spec_name: str = None, spec_value: str = None,
-                   user_id: int = None):
-        """创建新卡券（支持多规格）"""
+                   spec_name_2: str = None, spec_value_2: str = None, user_id: int = None):
+        """创建新卡券（支持双规格）"""
+        # 调试日志
+        logger.info(f"[DEBUG DB] create_card 被调用 - name: {name}")
+        logger.info(f"[DEBUG DB] is_multi_spec: {is_multi_spec}, type: {type(is_multi_spec)}")
+        logger.info(f"[DEBUG DB] spec_name: {spec_name}, spec_value: {spec_value}")
+        logger.info(f"[DEBUG DB] spec_name_2: {spec_name_2}, type: {type(spec_name_2)}")
+        logger.info(f"[DEBUG DB] spec_value_2: {spec_value_2}, type: {type(spec_value_2)}")
+
         with self.lock:
             try:
                 # 验证多规格参数
@@ -3359,11 +3390,11 @@ class DBManager:
                 cursor.execute('''
                 INSERT INTO cards (name, type, api_config, text_content, data_content, image_url,
                                  description, enabled, delay_seconds, is_multi_spec,
-                                 spec_name, spec_value, user_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                 spec_name, spec_value, spec_name_2, spec_value_2, user_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (name, card_type, api_config_str, text_content, data_content, image_url,
                       description, enabled, delay_seconds, is_multi_spec,
-                      spec_name, spec_value, user_id))
+                      spec_name, spec_value, spec_name_2, spec_value_2, user_id))
                 self.conn.commit()
                 card_id = cursor.lastrowid
 
@@ -3385,7 +3416,7 @@ class DBManager:
                     cursor.execute('''
                     SELECT id, name, type, api_config, text_content, data_content, image_url,
                            description, enabled, delay_seconds, is_multi_spec,
-                           spec_name, spec_value, created_at, updated_at
+                           spec_name, spec_value, spec_name_2, spec_value_2, created_at, updated_at
                     FROM cards
                     WHERE user_id = ?
                     ORDER BY created_at DESC
@@ -3394,7 +3425,7 @@ class DBManager:
                     cursor.execute('''
                     SELECT id, name, type, api_config, text_content, data_content, image_url,
                            description, enabled, delay_seconds, is_multi_spec,
-                           spec_name, spec_value, created_at, updated_at
+                           spec_name, spec_value, spec_name_2, spec_value_2, created_at, updated_at
                     FROM cards
                     ORDER BY created_at DESC
                     ''')
@@ -3425,8 +3456,10 @@ class DBManager:
                         'is_multi_spec': bool(row[10]) if row[10] is not None else False,
                         'spec_name': row[11],
                         'spec_value': row[12],
-                        'created_at': row[13],
-                        'updated_at': row[14]
+                        'spec_name_2': row[13],
+                        'spec_value_2': row[14],
+                        'created_at': row[15],
+                        'updated_at': row[16]
                     })
 
                 return cards
@@ -3443,14 +3476,14 @@ class DBManager:
                     cursor.execute('''
                     SELECT id, name, type, api_config, text_content, data_content, image_url,
                            description, enabled, delay_seconds, is_multi_spec,
-                           spec_name, spec_value, created_at, updated_at
+                           spec_name, spec_value, spec_name_2, spec_value_2, created_at, updated_at
                     FROM cards WHERE id = ? AND user_id = ?
                     ''', (card_id, user_id))
                 else:
                     cursor.execute('''
                     SELECT id, name, type, api_config, text_content, data_content, image_url,
                            description, enabled, delay_seconds, is_multi_spec,
-                           spec_name, spec_value, created_at, updated_at
+                           spec_name, spec_value, spec_name_2, spec_value_2, created_at, updated_at
                     FROM cards WHERE id = ?
                     ''', (card_id,))
 
@@ -3480,8 +3513,10 @@ class DBManager:
                         'is_multi_spec': bool(row[10]) if row[10] is not None else False,
                         'spec_name': row[11],
                         'spec_value': row[12],
-                        'created_at': row[13],
-                        'updated_at': row[14]
+                        'spec_name_2': row[13],
+                        'spec_value_2': row[14],
+                        'created_at': row[15],
+                        'updated_at': row[16]
                     }
                 return None
             except Exception as e:
@@ -3492,8 +3527,15 @@ class DBManager:
                    api_config=None, text_content: str = None, data_content: str = None,
                    image_url: str = None, description: str = None, enabled: bool = None,
                    delay_seconds: int = None, is_multi_spec: bool = None, spec_name: str = None,
-                   spec_value: str = None):
+                   spec_value: str = None, spec_name_2: str = None, spec_value_2: str = None):
         """更新卡券"""
+        # 调试日志
+        logger.info(f"[DEBUG DB] update_card 被调用 - card_id: {card_id}")
+        logger.info(f"[DEBUG DB] is_multi_spec: {is_multi_spec}, type: {type(is_multi_spec)}")
+        logger.info(f"[DEBUG DB] spec_name: {spec_name}, spec_value: {spec_value}")
+        logger.info(f"[DEBUG DB] spec_name_2: {spec_name_2}, type: {type(spec_name_2)}")
+        logger.info(f"[DEBUG DB] spec_value_2: {spec_value_2}, type: {type(spec_value_2)}")
+
         with self.lock:
             try:
                 # 处理api_config参数
@@ -3547,6 +3589,12 @@ class DBManager:
                 if spec_value is not None:
                     update_fields.append("spec_value = ?")
                     params.append(spec_value)
+                if spec_name_2 is not None:
+                    update_fields.append("spec_name_2 = ?")
+                    params.append(spec_name_2)
+                if spec_value_2 is not None:
+                    update_fields.append("spec_value_2 = ?")
+                    params.append(spec_value_2)
 
                 if not update_fields:
                     return True  # 没有需要更新的字段
@@ -3555,6 +3603,8 @@ class DBManager:
                 params.append(card_id)
 
                 sql = f"UPDATE cards SET {', '.join(update_fields)} WHERE id = ?"
+                logger.info(f"[DEBUG DB] 执行SQL: {sql}")
+                logger.info(f"[DEBUG DB] 参数: {params}")
                 self._execute_sql(cursor, sql, params)
 
                 if cursor.rowcount > 0:
@@ -3625,7 +3675,8 @@ class DBManager:
                     SELECT dr.id, dr.keyword, dr.card_id, dr.delivery_count, dr.enabled,
                            dr.description, dr.delivery_times, dr.created_at, dr.updated_at,
                            c.name as card_name, c.type as card_type,
-                           c.is_multi_spec, c.spec_name, c.spec_value
+                           c.is_multi_spec, c.spec_name, c.spec_value,
+                           c.spec_name_2, c.spec_value_2
                     FROM delivery_rules dr
                     LEFT JOIN cards c ON dr.card_id = c.id
                     WHERE dr.user_id = ?
@@ -3636,7 +3687,8 @@ class DBManager:
                     SELECT dr.id, dr.keyword, dr.card_id, dr.delivery_count, dr.enabled,
                            dr.description, dr.delivery_times, dr.created_at, dr.updated_at,
                            c.name as card_name, c.type as card_type,
-                           c.is_multi_spec, c.spec_name, c.spec_value
+                           c.is_multi_spec, c.spec_name, c.spec_value,
+                           c.spec_name_2, c.spec_value_2
                     FROM delivery_rules dr
                     LEFT JOIN cards c ON dr.card_id = c.id
                     ORDER BY dr.created_at DESC
@@ -3658,7 +3710,9 @@ class DBManager:
                         'card_type': row[10],
                         'is_multi_spec': bool(row[11]) if row[11] is not None else False,
                         'spec_name': row[12],
-                        'spec_value': row[13]
+                        'spec_value': row[13],
+                        'spec_name_2': row[14],
+                        'spec_value_2': row[15]
                     })
 
                 return rules
@@ -3666,29 +3720,53 @@ class DBManager:
                 logger.error(f"获取发货规则列表失败: {e}")
                 return []
 
-    def get_delivery_rules_by_keyword(self, keyword: str):
-        """根据关键字获取匹配的发货规则"""
+    def get_delivery_rules_by_keyword(self, keyword: str, user_id: int = None):
+        """根据关键字获取匹配的发货规则
+
+        Args:
+            keyword: 搜索关键字（商品标题）
+            user_id: 用户ID，用于过滤只属于该用户的发货规则
+        """
         with self.lock:
             try:
                 cursor = self.conn.cursor()
                 # 使用更灵活的匹配方式：既支持商品内容包含关键字，也支持关键字包含在商品内容中
-                cursor.execute('''
-                SELECT dr.id, dr.keyword, dr.card_id, dr.delivery_count, dr.enabled,
-                       dr.description, dr.delivery_times,
-                       c.name as card_name, c.type as card_type, c.api_config,
-                       c.text_content, c.data_content, c.image_url, c.enabled as card_enabled, c.description as card_description,
-                       c.delay_seconds as card_delay_seconds
-                FROM delivery_rules dr
-                LEFT JOIN cards c ON dr.card_id = c.id
-                WHERE dr.enabled = 1 AND c.enabled = 1
-                AND (? LIKE '%' || dr.keyword || '%' OR dr.keyword LIKE '%' || ? || '%')
-                ORDER BY
-                    CASE
-                        WHEN ? LIKE '%' || dr.keyword || '%' THEN LENGTH(dr.keyword)
-                        ELSE LENGTH(dr.keyword) / 2
-                    END DESC,
-                    dr.id ASC
-                ''', (keyword, keyword, keyword))
+                if user_id is not None:
+                    cursor.execute('''
+                    SELECT dr.id, dr.keyword, dr.card_id, dr.delivery_count, dr.enabled,
+                           dr.description, dr.delivery_times,
+                           c.name as card_name, c.type as card_type, c.api_config,
+                           c.text_content, c.data_content, c.image_url, c.enabled as card_enabled, c.description as card_description,
+                           c.delay_seconds as card_delay_seconds
+                    FROM delivery_rules dr
+                    LEFT JOIN cards c ON dr.card_id = c.id
+                    WHERE dr.enabled = 1 AND c.enabled = 1 AND dr.user_id = ?
+                    AND (? LIKE '%' || dr.keyword || '%' OR dr.keyword LIKE '%' || ? || '%')
+                    ORDER BY
+                        CASE
+                            WHEN ? LIKE '%' || dr.keyword || '%' THEN LENGTH(dr.keyword)
+                            ELSE LENGTH(dr.keyword) / 2
+                        END DESC,
+                        dr.id ASC
+                    ''', (user_id, keyword, keyword, keyword))
+                else:
+                    cursor.execute('''
+                    SELECT dr.id, dr.keyword, dr.card_id, dr.delivery_count, dr.enabled,
+                           dr.description, dr.delivery_times,
+                           c.name as card_name, c.type as card_type, c.api_config,
+                           c.text_content, c.data_content, c.image_url, c.enabled as card_enabled, c.description as card_description,
+                           c.delay_seconds as card_delay_seconds
+                    FROM delivery_rules dr
+                    LEFT JOIN cards c ON dr.card_id = c.id
+                    WHERE dr.enabled = 1 AND c.enabled = 1
+                    AND (? LIKE '%' || dr.keyword || '%' OR dr.keyword LIKE '%' || ? || '%')
+                    ORDER BY
+                        CASE
+                            WHEN ? LIKE '%' || dr.keyword || '%' THEN LENGTH(dr.keyword)
+                            ELSE LENGTH(dr.keyword) / 2
+                        END DESC,
+                        dr.id ASC
+                    ''', (keyword, keyword, keyword))
 
                 rules = []
                 for row in cursor.fetchall():
@@ -3735,7 +3813,9 @@ class DBManager:
                     self._execute_sql(cursor, '''
                     SELECT dr.id, dr.keyword, dr.card_id, dr.delivery_count, dr.enabled,
                            dr.description, dr.delivery_times, dr.created_at, dr.updated_at,
-                           c.name as card_name, c.type as card_type
+                           c.name as card_name, c.type as card_type,
+                           c.is_multi_spec, c.spec_name, c.spec_value,
+                           c.spec_name_2, c.spec_value_2
                     FROM delivery_rules dr
                     LEFT JOIN cards c ON dr.card_id = c.id
                     WHERE dr.id = ? AND dr.user_id = ?
@@ -3744,7 +3824,9 @@ class DBManager:
                     self._execute_sql(cursor, '''
                     SELECT dr.id, dr.keyword, dr.card_id, dr.delivery_count, dr.enabled,
                            dr.description, dr.delivery_times, dr.created_at, dr.updated_at,
-                           c.name as card_name, c.type as card_type
+                           c.name as card_name, c.type as card_type,
+                           c.is_multi_spec, c.spec_name, c.spec_value,
+                           c.spec_name_2, c.spec_value_2
                     FROM delivery_rules dr
                     LEFT JOIN cards c ON dr.card_id = c.id
                     WHERE dr.id = ?
@@ -3763,7 +3845,12 @@ class DBManager:
                         'created_at': row[7],
                         'updated_at': row[8],
                         'card_name': row[9],
-                        'card_type': row[10]
+                        'card_type': row[10],
+                        'is_multi_spec': bool(row[11]) if row[11] is not None else False,
+                        'spec_name': row[12],
+                        'spec_value': row[13],
+                        'spec_name_2': row[14],
+                        'spec_value_2': row[15]
                     }
                 return None
             except Exception as e:
@@ -3839,33 +3926,76 @@ class DBManager:
             except Exception as e:
                 logger.error(f"更新发货次数失败: {e}")
 
-    def get_delivery_rules_by_keyword_and_spec(self, keyword: str, spec_name: str = None, spec_value: str = None):
-        """根据关键字和规格信息获取匹配的发货规则（支持多规格）"""
+    def get_delivery_rules_by_keyword_and_spec(self, keyword: str, spec_name: str = None, spec_value: str = None,
+                                               spec_name_2: str = None, spec_value_2: str = None, user_id: int = None):
+        """根据关键字和规格信息获取匹配的发货规则（支持双规格）
+
+        Args:
+            keyword: 搜索关键字（商品标题）
+            spec_name: 规格1名称
+            spec_value: 规格1值
+            spec_name_2: 规格2名称
+            spec_value_2: 规格2值
+            user_id: 用户ID，用于过滤只属于该用户的发货规则
+        """
         with self.lock:
             try:
                 cursor = self.conn.cursor()
 
-                # 优先匹配：卡券名称+规格名称+规格值
+                # 构建user_id过滤条件
+                user_filter = "AND dr.user_id = ?" if user_id is not None else ""
+
+                # 优先匹配：卡券名称+规格1+规格2（如果都有的话）
                 if spec_name and spec_value:
-                    cursor.execute('''
-                    SELECT dr.id, dr.keyword, dr.card_id, dr.delivery_count, dr.enabled,
-                           dr.description, dr.delivery_times,
-                           c.name as card_name, c.type as card_type, c.api_config,
-                           c.text_content, c.data_content, c.enabled as card_enabled,
-                           c.description as card_description, c.delay_seconds as card_delay_seconds,
-                           c.is_multi_spec, c.spec_name, c.spec_value
-                    FROM delivery_rules dr
-                    LEFT JOIN cards c ON dr.card_id = c.id
-                    WHERE dr.enabled = 1 AND c.enabled = 1
-                    AND (? LIKE '%' || dr.keyword || '%' OR dr.keyword LIKE '%' || ? || '%')
-                    AND c.is_multi_spec = 1 AND c.spec_name = ? AND c.spec_value = ?
-                    ORDER BY
-                        CASE
-                            WHEN ? LIKE '%' || dr.keyword || '%' THEN LENGTH(dr.keyword)
-                            ELSE LENGTH(dr.keyword) / 2
-                        END DESC,
-                        dr.delivery_times ASC
-                    ''', (keyword, keyword, spec_name, spec_value, keyword))
+                    # 构建匹配条件：规格1必须匹配，规格2如果订单有则必须匹配，如果订单没有则卡券也不能有
+                    if spec_name_2 and spec_value_2:
+                        # 订单有双规格，卡券也必须有双规格且都匹配
+                        sql = f'''
+                        SELECT dr.id, dr.keyword, dr.card_id, dr.delivery_count, dr.enabled,
+                               dr.description, dr.delivery_times,
+                               c.name as card_name, c.type as card_type, c.api_config,
+                               c.text_content, c.data_content, c.enabled as card_enabled,
+                               c.description as card_description, c.delay_seconds as card_delay_seconds,
+                               c.is_multi_spec, c.spec_name, c.spec_value, c.spec_name_2, c.spec_value_2
+                        FROM delivery_rules dr
+                        LEFT JOIN cards c ON dr.card_id = c.id
+                        WHERE dr.enabled = 1 AND c.enabled = 1 {user_filter}
+                        AND (? LIKE '%' || dr.keyword || '%' OR dr.keyword LIKE '%' || ? || '%')
+                        AND c.is_multi_spec = 1 AND c.spec_name = ? AND c.spec_value = ?
+                        AND c.spec_name_2 = ? AND c.spec_value_2 = ?
+                        ORDER BY
+                            CASE
+                                WHEN ? LIKE '%' || dr.keyword || '%' THEN LENGTH(dr.keyword)
+                                ELSE LENGTH(dr.keyword) / 2
+                            END DESC,
+                            dr.delivery_times ASC
+                        '''
+                        params = [user_id, keyword, keyword, spec_name, spec_value, spec_name_2, spec_value_2, keyword] if user_id is not None else [keyword, keyword, spec_name, spec_value, spec_name_2, spec_value_2, keyword]
+                        cursor.execute(sql, [p for p in params if p is not None or user_id is None])
+                    else:
+                        # 订单只有单规格，优先匹配只有单规格的卡券
+                        sql = f'''
+                        SELECT dr.id, dr.keyword, dr.card_id, dr.delivery_count, dr.enabled,
+                               dr.description, dr.delivery_times,
+                               c.name as card_name, c.type as card_type, c.api_config,
+                               c.text_content, c.data_content, c.enabled as card_enabled,
+                               c.description as card_description, c.delay_seconds as card_delay_seconds,
+                               c.is_multi_spec, c.spec_name, c.spec_value, c.spec_name_2, c.spec_value_2
+                        FROM delivery_rules dr
+                        LEFT JOIN cards c ON dr.card_id = c.id
+                        WHERE dr.enabled = 1 AND c.enabled = 1 {user_filter}
+                        AND (? LIKE '%' || dr.keyword || '%' OR dr.keyword LIKE '%' || ? || '%')
+                        AND c.is_multi_spec = 1 AND c.spec_name = ? AND c.spec_value = ?
+                        AND (c.spec_name_2 IS NULL OR c.spec_name_2 = '')
+                        ORDER BY
+                            CASE
+                                WHEN ? LIKE '%' || dr.keyword || '%' THEN LENGTH(dr.keyword)
+                                ELSE LENGTH(dr.keyword) / 2
+                            END DESC,
+                            dr.delivery_times ASC
+                        '''
+                        params = [user_id, keyword, keyword, spec_name, spec_value, keyword] if user_id is not None else [keyword, keyword, spec_name, spec_value, keyword]
+                        cursor.execute(sql, [p for p in params if p is not None or user_id is None])
 
                     rules = []
                     for row in cursor.fetchall():
@@ -3897,11 +4027,16 @@ class DBManager:
                             'card_delay_seconds': row[14] or 0,
                             'is_multi_spec': bool(row[15]),
                             'spec_name': row[16],
-                            'spec_value': row[17]
+                            'spec_value': row[17],
+                            'spec_name_2': row[18],
+                            'spec_value_2': row[19]
                         })
 
                     if rules:
-                        logger.info(f"找到多规格匹配规则: {keyword} - {spec_name}:{spec_value}")
+                        if spec_name_2 and spec_value_2:
+                            logger.info(f"找到双规格匹配规则: {keyword} - {spec_name}:{spec_value}, {spec_name_2}:{spec_value_2}")
+                        else:
+                            logger.info(f"找到单规格匹配规则: {keyword} - {spec_name}:{spec_value}")
                         return rules
 
                 # 兜底匹配：仅卡券名称
@@ -3911,7 +4046,7 @@ class DBManager:
                        c.name as card_name, c.type as card_type, c.api_config,
                        c.text_content, c.data_content, c.enabled as card_enabled,
                        c.description as card_description, c.delay_seconds as card_delay_seconds,
-                       c.is_multi_spec, c.spec_name, c.spec_value
+                       c.is_multi_spec, c.spec_name, c.spec_value, c.spec_name_2, c.spec_value_2
                 FROM delivery_rules dr
                 LEFT JOIN cards c ON dr.card_id = c.id
                 WHERE dr.enabled = 1 AND c.enabled = 1
@@ -3955,7 +4090,9 @@ class DBManager:
                         'card_delay_seconds': row[14] or 0,
                         'is_multi_spec': bool(row[15]) if row[15] is not None else False,
                         'spec_name': row[16],
-                        'spec_value': row[17]
+                        'spec_value': row[17],
+                        'spec_name_2': row[18],
+                        'spec_value_2': row[19]
                     })
 
                 if rules:
@@ -5001,15 +5138,17 @@ class DBManager:
     def insert_or_update_order(self, order_id: str, item_id: str = None, buyer_id: str = None,
                               spec_name: str = None, spec_value: str = None, quantity: str = None,
                               amount: str = None, order_status: str = None, cookie_id: str = None,
-                              sid: str = None):
+                              sid: str = None, spec_name_2: str = None, spec_value_2: str = None):
         """插入或更新订单信息
-        
+
         Args:
             order_id: 订单ID
             item_id: 商品ID
             buyer_id: 买家ID
             spec_name: 规格名称
             spec_value: 规格值
+            spec_name_2: 规格2名称
+            spec_value_2: 规格2值
             quantity: 数量
             amount: 金额
             order_status: 订单状态
@@ -5052,6 +5191,12 @@ class DBManager:
                     if spec_value is not None:
                         update_fields.append("spec_value = ?")
                         update_values.append(spec_value)
+                    if spec_name_2 is not None:
+                        update_fields.append("spec_name_2 = ?")
+                        update_values.append(spec_name_2)
+                    if spec_value_2 is not None:
+                        update_fields.append("spec_value_2 = ?")
+                        update_values.append(spec_value_2)
                     if quantity is not None:
                         update_fields.append("quantity = ?")
                         update_values.append(quantity)
@@ -5076,10 +5221,10 @@ class DBManager:
                     # 插入新订单
                     cursor.execute('''
                     INSERT INTO orders (order_id, item_id, buyer_id, sid, spec_name, spec_value,
-                                      quantity, amount, order_status, cookie_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                      spec_name_2, spec_value_2, quantity, amount, order_status, cookie_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (order_id, item_id, buyer_id, sid, spec_name, spec_value,
-                          quantity, amount, order_status or 'unknown', cookie_id))
+                          spec_name_2, spec_value_2, quantity, amount, order_status or 'unknown', cookie_id))
                     logger.info(f"插入新订单: {order_id}")
 
                 self.conn.commit()
@@ -5097,7 +5242,7 @@ class DBManager:
                 cursor = self.conn.cursor()
                 cursor.execute('''
                 SELECT order_id, item_id, buyer_id, sid, spec_name, spec_value,
-                       quantity, amount, order_status, cookie_id, created_at, updated_at
+                       spec_name_2, spec_value_2, quantity, amount, order_status, cookie_id, created_at, updated_at
                 FROM orders WHERE order_id = ?
                 ''', (order_id,))
 
@@ -5110,12 +5255,14 @@ class DBManager:
                         'sid': row[3],
                         'spec_name': row[4],
                         'spec_value': row[5],
-                        'quantity': row[6],
-                        'amount': row[7],
-                        'order_status': row[8],
-                        'cookie_id': row[9],
-                        'created_at': row[10],
-                        'updated_at': row[11]
+                        'spec_name_2': row[6],
+                        'spec_value_2': row[7],
+                        'quantity': row[8],
+                        'amount': row[9],
+                        'order_status': row[10],
+                        'cookie_id': row[11],
+                        'created_at': row[12],
+                        'updated_at': row[13]
                     }
                 return None
 
@@ -5130,7 +5277,7 @@ class DBManager:
                 cursor = self.conn.cursor()
                 cursor.execute('''
                 SELECT order_id, item_id, buyer_id, sid, spec_name, spec_value,
-                       quantity, amount, order_status, created_at, updated_at
+                       spec_name_2, spec_value_2, quantity, amount, order_status, created_at, updated_at
                 FROM orders WHERE cookie_id = ?
                 ORDER BY created_at DESC LIMIT ?
                 ''', (cookie_id, limit))
@@ -5144,11 +5291,13 @@ class DBManager:
                         'sid': row[3],
                         'spec_name': row[4],
                         'spec_value': row[5],
-                        'quantity': row[6],
-                        'amount': row[7],
-                        'order_status': row[8],
-                        'created_at': row[9],
-                        'updated_at': row[10]
+                        'spec_name_2': row[6],
+                        'spec_value_2': row[7],
+                        'quantity': row[8],
+                        'amount': row[9],
+                        'order_status': row[10],
+                        'created_at': row[11],
+                        'updated_at': row[12]
                     })
 
                 return orders
@@ -5193,13 +5342,13 @@ class DBManager:
                 
                 cursor.execute(f'''
                 SELECT order_id, item_id, buyer_id, sid, spec_name, spec_value,
-                       quantity, amount, order_status, cookie_id, created_at, updated_at
-                FROM orders 
+                       spec_name_2, spec_value_2, quantity, amount, order_status, cookie_id, created_at, updated_at
+                FROM orders
                 WHERE {where_clause}
-                ORDER BY created_at DESC 
+                ORDER BY created_at DESC
                 LIMIT 1
                 ''', params)
-                
+
                 row = cursor.fetchone()
                 if row:
                     logger.info(f"根据买家ID找到最近订单: buyer_id={buyer_id}, order_id={row[0]}, item_id={row[1]}")
@@ -5210,12 +5359,14 @@ class DBManager:
                         'sid': row[3],
                         'spec_name': row[4],
                         'spec_value': row[5],
-                        'quantity': row[6],
-                        'amount': row[7],
-                        'order_status': row[8],
-                        'cookie_id': row[9],
-                        'created_at': row[10],
-                        'updated_at': row[11]
+                        'spec_name_2': row[6],
+                        'spec_value_2': row[7],
+                        'quantity': row[8],
+                        'amount': row[9],
+                        'order_status': row[10],
+                        'cookie_id': row[11],
+                        'created_at': row[12],
+                        'updated_at': row[13]
                     }
                 
                 logger.warning(f"未找到买家 {buyer_id} 的最近订单 (cookie_id={cookie_id}, status={status}, minutes={minutes})")
@@ -5267,13 +5418,13 @@ class DBManager:
                 
                 sql = f'''
                 SELECT order_id, item_id, buyer_id, sid, spec_name, spec_value,
-                       quantity, amount, order_status, cookie_id, created_at, updated_at
-                FROM orders 
+                       spec_name_2, spec_value_2, quantity, amount, order_status, cookie_id, created_at, updated_at
+                FROM orders
                 WHERE {where_clause}
-                ORDER BY created_at DESC 
+                ORDER BY created_at DESC
                 LIMIT 1
                 '''
-                
+
                 # 打印可直接执行的完整SQL语句，方便调试
                 debug_sql = sql
                 for param in params:
@@ -5284,9 +5435,9 @@ class DBManager:
                     else:
                         debug_sql = debug_sql.replace('?', str(param), 1)
                 logger.info(f"[get_recent_order_by_sid] 可执行SQL: {debug_sql.strip()}")
-                
+
                 cursor.execute(sql, params)
-                
+
                 row = cursor.fetchone()
                 if row:
                     logger.info(f"根据sid找到最近订单: sid={sid}, order_id={row[0]}, item_id={row[1]}")
@@ -5297,12 +5448,14 @@ class DBManager:
                         'sid': row[3],
                         'spec_name': row[4],
                         'spec_value': row[5],
-                        'quantity': row[6],
-                        'amount': row[7],
-                        'order_status': row[8],
-                        'cookie_id': row[9],
-                        'created_at': row[10],
-                        'updated_at': row[11]
+                        'spec_name_2': row[6],
+                        'spec_value_2': row[7],
+                        'quantity': row[8],
+                        'amount': row[9],
+                        'order_status': row[10],
+                        'cookie_id': row[11],
+                        'created_at': row[12],
+                        'updated_at': row[13]
                     }
                 
                 logger.warning(f"未找到sid {sid} 的最近订单 (cookie_id={cookie_id}, status={status}, minutes={minutes})")

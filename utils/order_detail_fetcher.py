@@ -245,11 +245,15 @@ class OrderDetailFetcher:
                             'sku_info': {
                                 'spec_name': existing_order.get('spec_name', ''),
                                 'spec_value': existing_order.get('spec_value', ''),
+                                'spec_name_2': existing_order.get('spec_name_2', ''),
+                                'spec_value_2': existing_order.get('spec_value_2', ''),
                                 'quantity': existing_order.get('quantity', ''),
                                 'amount': existing_order.get('amount', '')
                             },
                             'spec_name': existing_order.get('spec_name', ''),
                             'spec_value': existing_order.get('spec_value', ''),
+                            'spec_name_2': existing_order.get('spec_name_2', ''),
+                            'spec_value_2': existing_order.get('spec_value_2', ''),
                             'quantity': existing_order.get('quantity', ''),
                             'amount': existing_order.get('amount', ''),
                             'timestamp': time.time(),
@@ -338,6 +342,8 @@ class OrderDetailFetcher:
                     'sku_info': sku_info,  # 包含解析后的规格信息
                     'spec_name': sku_info.get('spec_name', '') if sku_info else '',
                     'spec_value': sku_info.get('spec_value', '') if sku_info else '',
+                    'spec_name_2': sku_info.get('spec_name_2', '') if sku_info else '',  # 规格2名称
+                    'spec_value_2': sku_info.get('spec_value_2', '') if sku_info else '',  # 规格2值
                     'quantity': sku_info.get('quantity', '') if sku_info else '',  # 数量
                     'amount': sku_info.get('amount', '') if sku_info else '',      # 金额
                     'timestamp': time.time(),
@@ -357,19 +363,61 @@ class OrderDetailFetcher:
     def _parse_sku_content(self, sku_content: str) -> Dict[str, str]:
         """
         解析SKU内容，根据冒号分割规格名称和规格值
+        支持双规格格式：例如 "版本选择:mac 版 - 单文件;远程:自行安装"
 
         Args:
             sku_content: 原始SKU内容字符串
 
         Returns:
             包含规格名称和规格值的字典，如果解析失败则返回空字典
+            对于双规格，会额外包含 spec_name_2 和 spec_value_2
         """
         try:
             if not sku_content or ':' not in sku_content:
                 logger.warning(f"SKU内容格式无效或不包含冒号: {sku_content}")
                 return {}
 
-            # 根据冒号分割
+            # 检查是否包含双规格（通过分号分隔，且分号后有冒号）
+            # 格式如：版本选择:mac 版 - 单文件;远程:自行安装
+            if ';' in sku_content:
+                # 查找分号位置，检查分号后面是否有冒号（表示有第二个规格）
+                semicolon_idx = sku_content.find(';')
+                second_part = sku_content[semicolon_idx + 1:].strip()
+
+                if ':' in second_part:
+                    # 这是双规格格式
+                    first_part = sku_content[:semicolon_idx].strip()
+
+                    # 解析第一个规格
+                    first_spec_parts = first_part.split(':', 1)
+                    if len(first_spec_parts) == 2:
+                        spec_name = first_spec_parts[0].strip()
+                        spec_value = first_spec_parts[1].strip()
+                    else:
+                        logger.warning(f"第一个规格解析失败: {first_part}")
+                        spec_name = ''
+                        spec_value = first_part
+
+                    # 解析第二个规格
+                    second_spec_parts = second_part.split(':', 1)
+                    spec_name_2 = second_spec_parts[0].strip()
+                    spec_value_2 = second_spec_parts[1].strip() if len(second_spec_parts) > 1 else ''
+
+                    result = {
+                        'spec_name': spec_name,
+                        'spec_value': spec_value
+                    }
+
+                    if spec_name_2 and spec_value_2:
+                        result['spec_name_2'] = spec_name_2
+                        result['spec_value_2'] = spec_value_2
+                        logger.info(f"双规格解析成功 - 规格1: {spec_name}:{spec_value}, 规格2: {spec_name_2}:{spec_value_2}")
+                    else:
+                        logger.info(f"SKU解析成功（单规格）- 规格名称: {spec_name}, 规格值: {spec_value}")
+
+                    return result
+
+            # 单规格处理（原有逻辑）
             parts = sku_content.split(':', 1)  # 只分割第一个冒号
 
             if len(parts) == 2:
@@ -395,7 +443,7 @@ class OrderDetailFetcher:
             return {}
 
     async def _get_sku_content(self) -> Optional[Dict[str, str]]:
-        """获取并解析SKU内容，包括规格、数量和金额"""
+        """获取并解析SKU内容，包括规格、数量和金额，支持双规格"""
         try:
             # 检查浏览器状态
             if not await self._check_browser_status():
@@ -426,100 +474,88 @@ class OrderDetailFetcher:
                 logger.warning("未找到金额元素")
                 print("⚠️ 未找到金额信息")
 
-            # 处理 sku--u_ddZval 元素
-            if len(sku_elements) == 2:
-                # 有两个元素：第一个是规格，第二个是数量
-                logger.info("检测到两个 sku--u_ddZval 元素，第一个为规格，第二个为数量")
-                print("📋 检测到两个元素：第一个为规格，第二个为数量")
-
-                # 处理规格（第一个元素）
-                spec_content = await sku_elements[0].text_content()
-                if spec_content:
-                    spec_content = spec_content.strip()
-                    logger.info(f"规格原始内容: {spec_content}")
-                    print(f"🛍️ 规格原始内容: {spec_content}")
-
-                    # 解析规格内容
-                    parsed_spec = self._parse_sku_content(spec_content)
-                    if parsed_spec:
-                        result.update(parsed_spec)
-                        print(f"📋 规格名称: {parsed_spec['spec_name']}")
-                        print(f"📝 规格值: {parsed_spec['spec_value']}")
-
-                # 处理数量（第二个元素）
-                quantity_content = await sku_elements[1].text_content()
-                if quantity_content:
-                    quantity_content = quantity_content.strip()
-                    logger.info(f"数量原始内容: {quantity_content}")
-                    print(f"📦 数量原始内容: {quantity_content}")
-
-                    # 从数量内容中提取数量值（使用冒号分割，取后面的值）
-                    if ':' in quantity_content:
-                        quantity_value = quantity_content.split(':', 1)[1].strip()
-                        # 去掉数量值前面的 'x' 符号（如 "x2" -> "2"）
-                        if quantity_value.startswith('x'):
-                            quantity_value = quantity_value[1:]
-                        result['quantity'] = quantity_value
-                        logger.info(f"提取到数量: {quantity_value}")
-                        print(f"🔢 数量: {quantity_value}")
-                    else:
-                        # 去掉数量值前面的 'x' 符号（如 "x2" -> "2"）
-                        if quantity_content.startswith('x'):
-                            quantity_content = quantity_content[1:]
-                        result['quantity'] = quantity_content
-                        logger.info(f"数量内容无冒号，直接使用: {quantity_content}")
-                        print(f"🔢 数量: {quantity_content}")
-
-            elif len(sku_elements) == 1:
-                # 只有一个元素：判断是否包含"数量"
-                logger.info("检测到一个 sku--u_ddZval 元素，判断是规格还是数量")
-                print("📋 检测到一个元素，判断是规格还是数量")
-
-                content = await sku_elements[0].text_content()
+            # 收集所有元素的内容
+            all_contents = []
+            for i, element in enumerate(sku_elements):
+                content = await element.text_content()
                 if content:
                     content = content.strip()
-                    logger.info(f"元素原始内容: {content}")
-                    print(f"🛍️ 元素原始内容: {content}")
+                    all_contents.append(content)
+                    logger.info(f"元素 {i+1} 原始内容: {content}")
+                    print(f"📋 元素 {i+1}: {content}")
 
-                    if '数量' in content:
-                        # 这是数量信息
-                        logger.info("判断为数量信息")
-                        print("📦 判断为数量信息")
+            # 分类：规格 vs 数量
+            specs = []
+            quantity_content = None
 
-                        if ':' in content:
-                            quantity_value = content.split(':', 1)[1].strip()
-                            # 去掉数量值前面的 'x' 符号（如 "x2" -> "2"）
-                            if quantity_value.startswith('x'):
-                                quantity_value = quantity_value[1:]
-                            result['quantity'] = quantity_value
-                            logger.info(f"提取到数量: {quantity_value}")
-                            print(f"🔢 数量: {quantity_value}")
-                        else:
-                            # 去掉数量值前面的 'x' 符号（如 "x2" -> "2"）
-                            if content.startswith('x'):
-                                content = content[1:]
-                            result['quantity'] = content
-                            logger.info(f"数量内容无冒号，直接使用: {content}")
-                            print(f"🔢 数量: {content}")
+            for content in all_contents:
+                if '数量' in content:
+                    # 这是数量
+                    quantity_content = content
+                elif ':' in content:
+                    # 这是规格（包含冒号的）
+                    specs.append(content)
+                else:
+                    # 没有冒号也没有"数量"，可能是纯数字（如 x1）
+                    if content.startswith('x') or content.isdigit():
+                        quantity_content = content
                     else:
-                        # 这是规格信息
-                        logger.info("判断为规格信息")
-                        print("📋 判断为规格信息")
+                        # 其他情况当作规格处理
+                        specs.append(content)
 
-                        parsed_spec = self._parse_sku_content(content)
-                        if parsed_spec:
-                            result.update(parsed_spec)
-                            print(f"📋 规格名称: {parsed_spec['spec_name']}")
-                            print(f"📝 规格值: {parsed_spec['spec_value']}")
-            else:
-                logger.warning(f"未找到或找到异常数量的 sku--u_ddZval 元素: {len(sku_elements)}")
-                print(f"⚠️ 未找到或找到异常数量的元素: {len(sku_elements)}")
+            # 解析规格1
+            if len(specs) >= 1:
+                parsed_spec = self._parse_sku_content(specs[0])
+                if parsed_spec:
+                    result['spec_name'] = parsed_spec['spec_name']
+                    result['spec_value'] = parsed_spec['spec_value']
+                    print(f"📋 规格1名称: {parsed_spec['spec_name']}")
+                    print(f"📝 规格1值: {parsed_spec['spec_value']}")
 
-                # 如果没有找到sku--u_ddZval元素，设置默认数量为1
-                if len(sku_elements) == 0:
-                    result['quantity'] = '1'
-                    logger.info("未找到sku--u_ddZval元素，数量默认设置为1")
-                    print("📦 数量默认设置为: 1")
+                    # 检查第一个规格是否已包含双规格（分号分隔的情况）
+                    if 'spec_name_2' in parsed_spec and 'spec_value_2' in parsed_spec:
+                        result['spec_name_2'] = parsed_spec['spec_name_2']
+                        result['spec_value_2'] = parsed_spec['spec_value_2']
+                        print(f"📋 规格2名称（来自分号分隔）: {parsed_spec['spec_name_2']}")
+                        print(f"📝 规格2值（来自分号分隔）: {parsed_spec['spec_value_2']}")
+
+            # 解析规格2（如果存在且尚未从分号分隔中获取）
+            if len(specs) >= 2 and 'spec_name_2' not in result:
+                parsed_spec2 = self._parse_sku_content(specs[1])
+                if parsed_spec2:
+                    result['spec_name_2'] = parsed_spec2['spec_name']
+                    result['spec_value_2'] = parsed_spec2['spec_value']
+                    print(f"📋 规格2名称: {parsed_spec2['spec_name']}")
+                    print(f"📝 规格2值: {parsed_spec2['spec_value']}")
+
+            # 如果有更多规格，记录日志（目前只支持双规格）
+            if len(specs) > 2:
+                logger.warning(f"检测到 {len(specs)} 个规格，目前只支持双规格，多余的规格将被忽略")
+                print(f"⚠️ 检测到 {len(specs)} 个规格，只处理前两个")
+
+            # 解析数量
+            if quantity_content:
+                logger.info(f"数量原始内容: {quantity_content}")
+                print(f"📦 数量原始内容: {quantity_content}")
+
+                if ':' in quantity_content:
+                    quantity_value = quantity_content.split(':', 1)[1].strip()
+                else:
+                    quantity_value = quantity_content
+
+                # 去掉数量值前面的 'x' 符号（如 "x2" -> "2"）
+                if quantity_value.startswith('x'):
+                    quantity_value = quantity_value[1:]
+
+                result['quantity'] = quantity_value
+                logger.info(f"提取到数量: {quantity_value}")
+                print(f"🔢 数量: {quantity_value}")
+
+            # 处理特殊情况：没有找到任何元素
+            if len(sku_elements) == 0:
+                result['quantity'] = '1'
+                logger.info("未找到sku--u_ddZval元素，数量默认设置为1")
+                print("📦 数量默认设置为: 1")
 
                 # 尝试获取页面的所有class包含sku的元素进行调试
                 all_sku_elements = await self.page.query_selector_all('[class*="sku"]')
@@ -706,11 +742,15 @@ async def fetch_order_detail_simple(order_id: str, cookie_string: str = None, he
                     'sku_info': {
                         'spec_name': existing_order.get('spec_name', ''),
                         'spec_value': existing_order.get('spec_value', ''),
+                        'spec_name_2': existing_order.get('spec_name_2', ''),
+                        'spec_value_2': existing_order.get('spec_value_2', ''),
                         'quantity': existing_order.get('quantity', ''),
                         'amount': existing_order.get('amount', '')
                     },
                     'spec_name': existing_order.get('spec_name', ''),
                     'spec_value': existing_order.get('spec_value', ''),
+                    'spec_name_2': existing_order.get('spec_name_2', ''),
+                    'spec_value_2': existing_order.get('spec_value_2', ''),
                     'quantity': existing_order.get('quantity', ''),
                     'amount': existing_order.get('amount', ''),
                     'order_status': existing_order.get('order_status', 'unknown'),  # 添加订单状态

@@ -2729,16 +2729,32 @@
               <div class="row">
                 <div class="col-md-6">
                   <div class="mb-3">
-                    <label class="form-label">规格名称 <span class="text-danger">*</span></label>
+                    <label class="form-label">规格1名称 <span class="text-danger">*</span></label>
                     <input type="text" class="form-control" id="specName" placeholder="例如：套餐类型、颜色、尺寸">
-                    <div class="form-text">规格的名称，如套餐类型、颜色等</div>
+                    <div class="form-text">规格1的名称，如套餐类型、颜色等</div>
                   </div>
                 </div>
                 <div class="col-md-6">
                   <div class="mb-3">
-                    <label class="form-label">规格值 <span class="text-danger">*</span></label>
+                    <label class="form-label">规格1值 <span class="text-danger">*</span></label>
                     <input type="text" class="form-control" id="specValue" placeholder="例如：30天、红色、XL">
-                    <div class="form-text">具体的规格值，如30天、红色等</div>
+                    <div class="form-text">规格1的具体值，如30天、红色等</div>
+                  </div>
+                </div>
+              </div>
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label class="form-label">规格2名称 <small class="text-muted">(可选)</small></label>
+                    <input type="text" class="form-control" id="specName2" placeholder="例如：版本、规格">
+                    <div class="form-text">规格2的名称（可选，用于双规格商品）</div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label class="form-label">规格2值 <small class="text-muted">(可选)</small></label>
+                    <input type="text" class="form-control" id="specValue2" placeholder="例如：标准版、加强版">
+                    <div class="form-text">规格2的具体值（可选，用于双规格商品）</div>
                   </div>
                 </div>
               </div>
@@ -2747,8 +2763,9 @@
                 <strong>多规格说明：</strong>
                 <ul class="mb-0 mt-2">
                   <li>同一卡券名称可以创建多个不同规格的卡券</li>
-                  <li>卡券名称+规格名称+规格值必须唯一</li>
+                  <li>卡券名称+规格1+规格2必须唯一</li>
                   <li>自动发货时会优先匹配精确规格，找不到时使用普通卡券兜底</li>
+                  <li>规格2为可选项，仅在商品有双规格时需要填写</li>
                 </ul>
               </div>
             </div>
@@ -3048,16 +3065,32 @@
               <div class="row">
                 <div class="col-md-6">
                   <div class="mb-3">
-                    <label class="form-label">规格名称 <span class="text-danger">*</span></label>
+                    <label class="form-label">规格1名称 <span class="text-danger">*</span></label>
                     <input type="text" class="form-control" id="editSpecName" placeholder="例如：套餐类型、颜色、尺寸">
-                    <div class="form-text">规格的名称，如套餐类型、颜色等</div>
+                    <div class="form-text">规格1的名称，如套餐类型、颜色等</div>
                   </div>
                 </div>
                 <div class="col-md-6">
                   <div class="mb-3">
-                    <label class="form-label">规格值 <span class="text-danger">*</span></label>
+                    <label class="form-label">规格1值 <span class="text-danger">*</span></label>
                     <input type="text" class="form-control" id="editSpecValue" placeholder="例如：30天、红色、XL">
-                    <div class="form-text">具体的规格值，如30天、红色等</div>
+                    <div class="form-text">规格1的具体值，如30天、红色等</div>
+                  </div>
+                </div>
+              </div>
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label class="form-label">规格2名称 <small class="text-muted">(可选)</small></label>
+                    <input type="text" class="form-control" id="editSpecName2" placeholder="例如：版本、规格">
+                    <div class="form-text">规格2的名称（可选，用于双规格商品）</div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label class="form-label">规格2值 <small class="text-muted">(可选)</small></label>
+                    <input type="text" class="form-control" id="editSpecValue2" placeholder="例如：标准版、加强版">
+                    <div class="form-text">规格2的具体值（可选，用于双规格商品）</div>
                   </div>
                 </div>
               </div>
@@ -3066,8 +3099,9 @@
                 <strong>多规格说明：</strong>
                 <ul class="mb-0 mt-2">
                   <li>同一卡券名称可以创建多个不同规格的卡券</li>
-                  <li>卡券名称+规格名称+规格值必须唯一</li>
+                  <li>卡券名称+规格1+规格2必须唯一</li>
                   <li>自动发货时会优先匹配精确规格，找不到时使用普通卡券兜底</li>
+                  <li>规格2为可选项，仅在商品有双规格时需要填写</li>
                 </ul>
               </div>
             </div>
@@ -3190,7 +3224,7 @@
 
   <!-- JS依赖 -->
   <script src="/static/lib/bootstrap/bootstrap.bundle.min.js"></script>
-  <script src="/static/js/app.js?v=2.2.0"></script>
+  <script src="/static/js/app.js?v=2.3.1"></script>
 
   <!-- 默认回复管理模态框 -->
   <div class="modal fade" id="defaultReplyModal" tabindex="-1" aria-labelledby="defaultReplyModalLabel" aria-hidden="true">

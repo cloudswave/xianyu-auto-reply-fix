@@ -5172,13 +5172,20 @@ class XianyuLive:
                     # 获取解析后的规格信息
                     spec_name = result.get('spec_name', '')
                     spec_value = result.get('spec_value', '')
+                    spec_name_2 = result.get('spec_name_2', '')
+                    spec_value_2 = result.get('spec_value_2', '')
                     quantity = result.get('quantity', '')
                     amount = result.get('amount', '')
 
                     if spec_name and spec_value:
                         logger.info(f"【{self.cookie_id}】📋 规格名称: {spec_name}")
                         logger.info(f"【{self.cookie_id}】📝 规格值: {spec_value}")
-                        print(f"🛍️ 【{self.cookie_id}】订单 {order_id} 规格信息: {spec_name} -> {spec_value}")
+                        if spec_name_2 and spec_value_2:
+                            logger.info(f"【{self.cookie_id}】📋 规格2名称: {spec_name_2}")
+                            logger.info(f"【{self.cookie_id}】📝 规格2值: {spec_value_2}")
+                            print(f"🛍️ 【{self.cookie_id}】订单 {order_id} 规格信息: {spec_name} -> {spec_value}, {spec_name_2} -> {spec_value_2}")
+                        else:
+                            print(f"🛍️ 【{self.cookie_id}】订单 {order_id} 规格信息: {spec_name} -> {spec_value}")
                     else:
                         logger.warning(f"【{self.cookie_id}】未获取到有效的规格信息")
                         print(f"⚠️ 【{self.cookie_id}】订单 {order_id} 规格信息获取失败")
@@ -5198,6 +5205,8 @@ class XianyuLive:
                                 sid=sid,
                                 spec_name=spec_name,
                                 spec_value=spec_value,
+                                spec_name_2=spec_name_2,
+                                spec_value_2=spec_value_2,
                                 quantity=quantity,
                                 amount=amount,
                                 cookie_id=self.cookie_id
@@ -5317,6 +5326,8 @@ class XianyuLive:
             is_multi_spec = db_manager.get_item_multi_spec_status(self.cookie_id, item_id)
             spec_name = None
             spec_value = None
+            spec_name_2 = None
+            spec_value_2 = None
 
             # 如果是多规格商品且有订单ID，获取规格信息
             if is_multi_spec and order_id:
@@ -5327,8 +5338,12 @@ class XianyuLive:
                     if order_detail and isinstance(order_detail, dict):
                         spec_name = order_detail.get('spec_name', '')
                         spec_value = order_detail.get('spec_value', '')
+                        spec_name_2 = order_detail.get('spec_name_2', '')
+                        spec_value_2 = order_detail.get('spec_value_2', '')
                         if spec_name and spec_value:
                             logger.info(f"获取到规格信息: {spec_name} = {spec_value}")
+                            if spec_name_2 and spec_value_2:
+                                logger.info(f"获取到规格2信息: {spec_name_2} = {spec_value_2}")
                         else:
                             logger.warning(f"未能获取到规格信息，将使用兜底匹配")
                     else:
@@ -5341,8 +5356,13 @@ class XianyuLive:
 
             # 第一步：如果有规格信息，尝试精确匹配多规格发货规则
             if spec_name and spec_value:
-                logger.info(f"尝试精确匹配多规格发货规则: {search_text[:50]}... [{spec_name}:{spec_value}]")
-                delivery_rules = db_manager.get_delivery_rules_by_keyword_and_spec(search_text, spec_name, spec_value)
+                if spec_name_2 and spec_value_2:
+                    logger.info(f"尝试精确匹配双规格发货规则: {search_text[:50]}... [{spec_name}:{spec_value}, {spec_name_2}:{spec_value_2}]")
+                else:
+                    logger.info(f"尝试精确匹配单规格发货规则: {search_text[:50]}... [{spec_name}:{spec_value}]")
+                delivery_rules = db_manager.get_delivery_rules_by_keyword_and_spec(
+                    search_text, spec_name, spec_value, spec_name_2, spec_value_2, user_id=self.user_id
+                )
 
                 if delivery_rules:
                     logger.info(f"✅ 找到精确匹配的多规格发货规则: {len(delivery_rules)}个")
@@ -5352,7 +5372,7 @@ class XianyuLive:
             # 第二步：如果精确匹配失败，尝试兜底匹配（普通发货规则）
             if not delivery_rules:
                 logger.info(f"尝试兜底匹配普通发货规则: {search_text[:50]}...")
-                delivery_rules = db_manager.get_delivery_rules_by_keyword(search_text)
+                delivery_rules = db_manager.get_delivery_rules_by_keyword(search_text, user_id=self.user_id)
 
                 if delivery_rules:
                     logger.info(f"✅ 找到兜底匹配的普通发货规则: {len(delivery_rules)}个")
@@ -5388,14 +5408,23 @@ class XianyuLive:
             # 详细的匹配结果日志
             if rule.get('is_multi_spec'):
                 if spec_name and spec_value:
-                    logger.info(f"🎯 精确匹配多规格发货规则: {rule['keyword']} -> {rule['card_name']} [{rule['spec_name']}:{rule['spec_value']}]")
-                    logger.info(f"📋 订单规格: {spec_name}:{spec_value} ✅ 匹配卡券规格: {rule['spec_name']}:{rule['spec_value']}")
+                    rule_spec_info = f"{rule['spec_name']}:{rule['spec_value']}"
+                    if rule.get('spec_name_2') and rule.get('spec_value_2'):
+                        rule_spec_info += f", {rule['spec_name_2']}:{rule['spec_value_2']}"
+                    logger.info(f"🎯 精确匹配多规格发货规则: {rule['keyword']} -> {rule['card_name']} [{rule_spec_info}]")
+                    order_spec_info = f"{spec_name}:{spec_value}"
+                    if spec_name_2 and spec_value_2:
+                        order_spec_info += f", {spec_name_2}:{spec_value_2}"
+                    logger.info(f"📋 订单规格: {order_spec_info} ✅ 匹配卡券规格: {rule_spec_info}")
                 else:
                     logger.info(f"⚠️ 使用多规格发货规则但无订单规格信息: {rule['keyword']} -> {rule['card_name']} [{rule['spec_name']}:{rule['spec_value']}]")
             else:
                 if spec_name and spec_value:
+                    order_spec_info = f"{spec_name}:{spec_value}"
+                    if spec_name_2 and spec_value_2:
+                        order_spec_info += f", {spec_name_2}:{spec_value_2}"
                     logger.info(f"🔄 兜底匹配普通发货规则: {rule['keyword']} -> {rule['card_name']} ({rule['card_type']})")
-                    logger.info(f"📋 订单规格: {spec_name}:{spec_value} ➡️ 使用普通卡券兜底")
+                    logger.info(f"📋 订单规格: {order_spec_info} ➡️ 使用普通卡券兜底")
                 else:
                     logger.info(f"✅ 匹配普通发货规则: {rule['keyword']} -> {rule['card_name']} ({rule['card_type']})")
 

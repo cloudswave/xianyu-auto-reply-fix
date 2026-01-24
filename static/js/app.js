@@ -4369,7 +4369,11 @@ function renderCardsList(cards) {
     // 规格信息显示
     let specDisplay = '<span class="text-muted">普通卡券</span>';
     if (card.is_multi_spec && card.spec_name && card.spec_value) {
-        specDisplay = `<span class="badge bg-primary">${card.spec_name}: ${card.spec_value}</span>`;
+        let specInfo = `${card.spec_name}: ${card.spec_value}`;
+        if (card.spec_name_2 && card.spec_value_2) {
+            specInfo += `<br>${card.spec_name_2}: ${card.spec_value_2}`;
+        }
+        specDisplay = `<span class="badge bg-primary">${specInfo}</span>`;
     }
 
     tr.innerHTML = `
@@ -4804,6 +4808,8 @@ function clearAddCardForm() {
     setElementValue('isMultiSpec', false);
     setElementValue('specName', '');
     setElementValue('specValue', '');
+    setElementValue('specName2', '');
+    setElementValue('specValue2', '');
 
     // 隐藏多规格字段
     setElementDisplay('multiSpecFields', 'none');
@@ -4844,10 +4850,19 @@ async function saveCard() {
     const isMultiSpec = document.getElementById('isMultiSpec').checked;
     const specName = document.getElementById('specName').value;
     const specValue = document.getElementById('specValue').value;
+    const specName2 = document.getElementById('specName2').value;
+    const specValue2 = document.getElementById('specValue2').value;
+
+    // 调试日志
+    console.log('[DEBUG] 创建卡券 - isMultiSpec:', isMultiSpec);
+    console.log('[DEBUG] 创建卡券 - specName:', specName);
+    console.log('[DEBUG] 创建卡券 - specValue:', specValue);
+    console.log('[DEBUG] 创建卡券 - specName2:', specName2);
+    console.log('[DEBUG] 创建卡券 - specValue2:', specValue2);
 
     // 验证多规格字段
     if (isMultiSpec && (!specName || !specValue)) {
-        showToast('多规格卡券必须填写规格名称和规格值', 'warning');
+        showToast('多规格卡券必须填写规格1名称和规格1值', 'warning');
         return;
     }
 
@@ -4859,8 +4874,13 @@ async function saveCard() {
         enabled: true,
         is_multi_spec: isMultiSpec,
         spec_name: isMultiSpec ? specName : null,
-        spec_value: isMultiSpec ? specValue : null
+        spec_value: isMultiSpec ? specValue : null,
+        spec_name_2: isMultiSpec ? specName2 : null,
+        spec_value_2: isMultiSpec ? specValue2 : null
     };
+
+    // 调试日志 - 显示完整的 cardData
+    console.log('[DEBUG] 创建卡券 - 发送的 cardData:', JSON.stringify(cardData, null, 2));
 
     // 根据类型添加特定配置
     switch(cardType) {
@@ -5079,7 +5099,7 @@ function renderDeliveryRulesList(rules) {
         <div>
             <span class="badge bg-primary">${rule.card_name || '未知卡券'}</span>
             ${rule.is_multi_spec && rule.spec_name && rule.spec_value ?
-            `<br><small class="text-muted mt-1 d-block"><i class="bi bi-tags"></i> ${rule.spec_name}: ${rule.spec_value}</small>` :
+            `<br><small class="text-muted mt-1 d-block"><i class="bi bi-tags"></i> ${rule.spec_name}: ${rule.spec_value}${rule.spec_name_2 && rule.spec_value_2 ? `<br><i class="bi bi-tags"></i> ${rule.spec_name_2}: ${rule.spec_value_2}` : ''}</small>` :
             ''}
         </div>
         </td>
@@ -5176,7 +5196,11 @@ async function loadCardsForSelect() {
 
             // 添加规格信息
             if (card.is_multi_spec && card.spec_name && card.spec_value) {
-            displayText += ` [${card.spec_name}:${card.spec_value}]`;
+            let specInfo = `${card.spec_name}:${card.spec_value}`;
+            if (card.spec_name_2 && card.spec_value_2) {
+                specInfo += `, ${card.spec_name_2}:${card.spec_value_2}`;
+            }
+            displayText += ` [${specInfo}]`;
             }
 
             option.textContent = displayText;
@@ -5260,11 +5284,15 @@ async function editCard(cardId) {
         document.getElementById('editIsMultiSpec').checked = isMultiSpec;
         document.getElementById('editSpecName').value = card.spec_name || '';
         document.getElementById('editSpecValue').value = card.spec_value || '';
+        document.getElementById('editSpecName2').value = card.spec_name_2 || '';
+        document.getElementById('editSpecValue2').value = card.spec_value_2 || '';
 
         // 添加调试日志
         console.log('编辑卡券 - 多规格状态:', isMultiSpec);
-        console.log('编辑卡券 - 规格名称:', card.spec_name);
-        console.log('编辑卡券 - 规格值:', card.spec_value);
+        console.log('编辑卡券 - 规格1名称:', card.spec_name);
+        console.log('编辑卡券 - 规格1值:', card.spec_value);
+        console.log('编辑卡券 - 规格2名称:', card.spec_name_2);
+        console.log('编辑卡券 - 规格2值:', card.spec_value_2);
 
         // 根据类型填充特定字段
         if (card.type === 'api' && card.api_config) {
@@ -5386,10 +5414,19 @@ async function updateCard() {
     const isMultiSpec = document.getElementById('editIsMultiSpec').checked;
     const specName = document.getElementById('editSpecName').value;
     const specValue = document.getElementById('editSpecValue').value;
+    const specName2 = document.getElementById('editSpecName2').value;
+    const specValue2 = document.getElementById('editSpecValue2').value;
+
+    // 调试日志
+    console.log('[DEBUG] 更新卡券 - isMultiSpec:', isMultiSpec);
+    console.log('[DEBUG] 更新卡券 - specName:', specName);
+    console.log('[DEBUG] 更新卡券 - specValue:', specValue);
+    console.log('[DEBUG] 更新卡券 - specName2:', specName2);
+    console.log('[DEBUG] 更新卡券 - specValue2:', specValue2);
 
     // 验证多规格字段
     if (isMultiSpec && (!specName || !specValue)) {
-        showToast('多规格卡券必须填写规格名称和规格值', 'warning');
+        showToast('多规格卡券必须填写规格1名称和规格1值', 'warning');
         return;
     }
 
@@ -5401,8 +5438,13 @@ async function updateCard() {
         enabled: document.getElementById('editCardEnabled').checked,
         is_multi_spec: isMultiSpec,
         spec_name: isMultiSpec ? specName : null,
-        spec_value: isMultiSpec ? specValue : null
+        spec_value: isMultiSpec ? specValue : null,
+        spec_name_2: isMultiSpec ? specName2 : null,
+        spec_value_2: isMultiSpec ? specValue2 : null
     };
+
+    // 调试日志 - 显示完整的 cardData
+    console.log('[DEBUG] 发送的 cardData:', JSON.stringify(cardData, null, 2));
 
     // 根据类型添加特定配置
     switch(cardType) {
@@ -5659,7 +5701,11 @@ async function loadCardsForEditSelect() {
 
             // 添加规格信息
             if (card.is_multi_spec && card.spec_name && card.spec_value) {
-            displayText += ` [${card.spec_name}:${card.spec_value}]`;
+            let specInfo = `${card.spec_name}:${card.spec_value}`;
+            if (card.spec_name_2 && card.spec_value_2) {
+                specInfo += `, ${card.spec_name_2}:${card.spec_value_2}`;
+            }
+            displayText += ` [${specInfo}]`;
             }
 
             option.textContent = displayText;
@@ -9860,7 +9906,7 @@ function createOrderRow(order) {
             </td>
             <td>
                 ${order.spec_name && order.spec_value ?
-                    `<small class="text-muted">${order.spec_name}:</small><br>${order.spec_value}` :
+                    `<small class="text-muted">${order.spec_name}:</small><br>${order.spec_value}${order.spec_name_2 && order.spec_value_2 ? `<br><small class="text-muted">${order.spec_name_2}:</small><br>${order.spec_value_2}` : ''}` :
                     '-'
                 }
             </td>
@@ -10081,8 +10127,10 @@ async function showOrderDetail(orderId) {
                                 <div class="col-md-6">
                                     <h6>商品信息</h6>
                                     <table class="table table-sm">
-                                        <tr><td>规格名称</td><td>${order.spec_name || '无'}</td></tr>
-                                        <tr><td>规格值</td><td>${order.spec_value || '无'}</td></tr>
+                                        <tr><td>规格1名称</td><td>${order.spec_name || '无'}</td></tr>
+                                        <tr><td>规格1值</td><td>${order.spec_value || '无'}</td></tr>
+                                        <tr><td>规格2名称</td><td>${order.spec_name_2 || '无'}</td></tr>
+                                        <tr><td>规格2值</td><td>${order.spec_value_2 || '无'}</td></tr>
                                         <tr><td>数量</td><td>${order.quantity || '1'}</td></tr>
                                         <tr><td>金额</td><td>¥${order.amount || '0.00'}</td></tr>
                                     </table>
