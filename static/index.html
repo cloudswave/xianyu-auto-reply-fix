@@ -272,6 +272,12 @@
                     <br>
                     <small class="opacity-75">使用消息界面的cookie</small>
                   </button>
+                  <button type="button" class="btn btn-outline-warning btn-lg flex-fill refresh-cookie-btn" onclick="toggleRefreshCookieForm()" style="max-width: 300px;">
+                    <i class="bi bi-arrow-repeat me-2"></i>
+                    <span class="fw-bold">刷新Cookie</span>
+                    <br>
+                    <small class="opacity-75">验证账密并刷新已有账号</small>
+                  </button>
                 </div>
               </div>
             </div>
@@ -334,6 +340,44 @@
                     <i class="bi bi-plus-lg me-1"></i>添加账号
                   </button>
                   <button type="button" class="btn btn-secondary ms-2" onclick="toggleManualInput()">
+                    <i class="bi bi-x-circle me-1"></i>取消
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <!-- 刷新Cookie表单（默认隐藏） -->
+            <div id="refreshCookieForm" style="display: none;">
+              <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>提示：</strong>此功能将使用账号已配置的用户名和密码重新登录，刷新Cookie。请确保账号已配置正确的登录凭据。
+              </div>
+              <form id="refreshCookieFormElement" class="row g-3">
+                <div class="col-md-6">
+                  <label for="refreshCookieAccountSelect" class="form-label">选择要刷新的账号</label>
+                  <select class="form-select" id="refreshCookieAccountSelect" required>
+                    <option value="">请选择账号...</option>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">账号状态</label>
+                  <div id="refreshCookieAccountStatus" class="form-control-plaintext text-muted">
+                    请先选择账号
+                  </div>
+                </div>
+                <div class="col-12">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="refreshCookieShowBrowser" value="1">
+                    <label class="form-check-label" for="refreshCookieShowBrowser">
+                      显示浏览器窗口（如果使用服务器，请勿打开该开关，会导致登录失败）
+                    </label>
+                  </div>
+                </div>
+                <div class="col-12">
+                  <button type="submit" class="btn btn-warning">
+                    <i class="bi bi-arrow-repeat me-1"></i>验证并刷新Cookie
+                  </button>
+                  <button type="button" class="btn btn-secondary ms-2" onclick="toggleRefreshCookieForm()">
                     <i class="bi bi-x-circle me-1"></i>取消
                   </button>
                 </div>
@@ -1815,6 +1859,28 @@
                     <i class="bi bi-check-circle me-1"></i>应用主题
                   </button>
                 </form>
+              </div>
+            </div>
+          </div>
+
+          <!-- 系统重启 (仅管理员可见) -->
+          <div id="system-restart-card" class="col-md-6 mt-4" style="display: none;">
+            <div class="card">
+              <div class="card-header">
+                <i class="bi bi-power me-2"></i>系统重启
+                <span class="badge bg-danger ms-2">管理员专用</span>
+              </div>
+              <div class="card-body">
+                <p class="text-muted mb-3">重启整个应用系统，所有账号任务将重新启动</p>
+                <button type="button" class="btn btn-danger" onclick="restartSystem()">
+                  <i class="bi bi-power me-1"></i>重启系统
+                </button>
+                <div class="mt-2">
+                  <small class="text-warning">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    注意：重启期间系统将暂时不可用
+                  </small>
+                </div>
               </div>
             </div>
           </div>

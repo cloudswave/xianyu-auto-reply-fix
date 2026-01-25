@@ -2702,6 +2702,12 @@ async function checkAuth() {
         if (registrationSettings) {
         registrationSettings.style.display = 'block';
         }
+
+        // 显示系统重启功能
+        const systemRestartCard = document.getElementById('system-restart-card');
+        if (systemRestartCard) {
+        systemRestartCard.style.display = 'block';
+        }
     }
 
     return true;
@@ -6223,6 +6229,41 @@ async function reloadSystemCache() {
     }
 }
 
+// 重启系统
+async function restartSystem() {
+    // 二次确认
+    if (!confirm('确定要重启系统吗？\n\n重启期间系统将暂时不可用，所有账号任务将重新启动。')) {
+        return;
+    }
+
+    try {
+        showToast('正在重启系统...', 'info');
+
+        const response = await fetch('/api/update/restart', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            showToast('系统正在重启，请稍候刷新页面...', 'success');
+
+            // 5秒后自动刷新页面
+            setTimeout(() => {
+                window.location.reload();
+            }, 5000);
+        } else {
+            const error = await response.json();
+            showToast(`重启失败: ${error.detail || error.message || '未知错误'}`, 'danger');
+        }
+    } catch (error) {
+        console.error('重启系统失败:', error);
+        showToast('重启系统失败，请检查网络连接', 'danger');
+    }
+}
+
 // ================================
 // 【商品管理菜单】相关功能
 // ================================
@@ -7956,10 +7997,15 @@ async function importKeywords() {
 function toggleManualInput() {
     const manualForm = document.getElementById('manualInputForm');
     const passwordForm = document.getElementById('passwordLoginForm');
+    const refreshForm = document.getElementById('refreshCookieForm');
     if (manualForm.style.display === 'none') {
         // 隐藏账号密码登录表单
         if (passwordForm) {
             passwordForm.style.display = 'none';
+        }
+        // 隐藏刷新Cookie表单
+        if (refreshForm) {
+            refreshForm.style.display = 'none';
         }
         manualForm.style.display = 'block';
         // 清空表单
@@ -7973,10 +8019,15 @@ function toggleManualInput() {
 function togglePasswordLogin() {
     const passwordForm = document.getElementById('passwordLoginForm');
     const manualForm = document.getElementById('manualInputForm');
+    const refreshForm = document.getElementById('refreshCookieForm');
     if (passwordForm.style.display === 'none') {
         // 隐藏手动输入表单
         if (manualForm) {
             manualForm.style.display = 'none';
+        }
+        // 隐藏刷新Cookie表单
+        if (refreshForm) {
+            refreshForm.style.display = 'none';
         }
         passwordForm.style.display = 'block';
         // 清空表单
@@ -7984,6 +8035,224 @@ function togglePasswordLogin() {
     } else {
         passwordForm.style.display = 'none';
     }
+}
+
+// 切换刷新Cookie表单显示/隐藏
+function toggleRefreshCookieForm() {
+    const refreshForm = document.getElementById('refreshCookieForm');
+    const manualForm = document.getElementById('manualInputForm');
+    const passwordForm = document.getElementById('passwordLoginForm');
+
+    if (refreshForm.style.display === 'none') {
+        // 隐藏其他表单
+        if (manualForm) {
+            manualForm.style.display = 'none';
+        }
+        if (passwordForm) {
+            passwordForm.style.display = 'none';
+        }
+        refreshForm.style.display = 'block';
+        // 清空表单
+        document.getElementById('refreshCookieFormElement').reset();
+        document.getElementById('refreshCookieAccountStatus').innerHTML = '请先选择账号';
+        // 加载账号列表到下拉框
+        loadRefreshCookieAccountList();
+    } else {
+        refreshForm.style.display = 'none';
+    }
+}
+
+// 加载账号列表到刷新Cookie下拉框
+async function loadRefreshCookieAccountList() {
+    const select = document.getElementById('refreshCookieAccountSelect');
+    select.innerHTML = '<option value="">请选择账号...</option>';
+
+    try {
+        const response = await fetch(`${apiBase}/cookies/details`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+        const data = await response.json();
+
+        if (data && data.length > 0) {
+            data.forEach(cookie => {
+                const option = document.createElement('option');
+                option.value = cookie.id;
+                // 显示账号ID和是否配置了用户名密码
+                const hasCredentials = cookie.username ? '(已配置账密)' : '(未配置账密)';
+                option.textContent = `${cookie.id} ${hasCredentials}`;
+                option.dataset.hasCredentials = cookie.username ? 'true' : 'false';
+                option.dataset.username = cookie.username || '';
+                select.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('加载账号列表失败:', error);
+        showToast('加载账号列表失败', 'danger');
+    }
+}
+
+// 刷新Cookie账号选择变化时显示状态
+document.addEventListener('DOMContentLoaded', function() {
+    const select = document.getElementById('refreshCookieAccountSelect');
+    if (select) {
+        select.addEventListener('change', function() {
+            const statusDiv = document.getElementById('refreshCookieAccountStatus');
+            const selectedOption = this.options[this.selectedIndex];
+
+            if (this.value) {
+                const hasCredentials = selectedOption.dataset.hasCredentials === 'true';
+                const username = selectedOption.dataset.username;
+
+                if (hasCredentials) {
+                    statusDiv.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i>已配置用户名: ${username}</span>`;
+                } else {
+                    statusDiv.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>未配置用户名和密码，无法刷新</span>`;
+                }
+            } else {
+                statusDiv.innerHTML = '请先选择账号';
+            }
+        });
+    }
+
+    // 绑定刷新Cookie表单提交事件
+    const refreshForm = document.getElementById('refreshCookieFormElement');
+    if (refreshForm) {
+        refreshForm.addEventListener('submit', handleRefreshCookie);
+    }
+});
+
+// 处理刷新Cookie表单提交
+async function handleRefreshCookie(event) {
+    event.preventDefault();
+
+    const select = document.getElementById('refreshCookieAccountSelect');
+    const cookieId = select.value;
+    const selectedOption = select.options[select.selectedIndex];
+    const showBrowser = document.getElementById('refreshCookieShowBrowser').checked;
+
+    if (!cookieId) {
+        showToast('请选择要刷新的账号', 'warning');
+        return;
+    }
+
+    const hasCredentials = selectedOption.dataset.hasCredentials === 'true';
+    if (!hasCredentials) {
+        showToast('该账号未配置用户名和密码，无法刷新Cookie', 'danger');
+        return;
+    }
+
+    // 显示loading
+    toggleLoading(true);
+
+    try {
+        // 调用密码登录API刷新Cookie
+        const response = await fetch(`${apiBase}/password-login`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({
+                account_id: cookieId,
+                refresh_mode: true,  // 标记为刷新模式
+                show_browser: showBrowser
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.session_id) {
+            // 开始轮询检查登录状态
+            showToast('正在验证账号并刷新Cookie，请稍候...', 'info');
+            startRefreshCookiePolling(data.session_id, cookieId);
+        } else {
+            toggleLoading(false);
+            showToast(data.message || '启动刷新失败', 'danger');
+        }
+    } catch (error) {
+        toggleLoading(false);
+        console.error('刷新Cookie失败:', error);
+        showToast('刷新Cookie失败: ' + error.message, 'danger');
+    }
+}
+
+// 更新刷新Cookie状态显示
+function updateRefreshCookieStatus(message) {
+    const statusDiv = document.getElementById('refreshCookieAccountStatus');
+    if (statusDiv) {
+        statusDiv.innerHTML = `<span class="text-info"><i class="bi bi-hourglass-split me-1"></i>${message}</span>`;
+    }
+}
+
+// 轮询检查刷新Cookie状态
+let refreshCookieCheckInterval = null;
+
+function startRefreshCookiePolling(sessionId, cookieId) {
+    // 清除之前的轮询
+    if (refreshCookieCheckInterval) {
+        clearInterval(refreshCookieCheckInterval);
+    }
+
+    let checkCount = 0;
+    const maxChecks = 120; // 最多检查120次，每次2秒，共4分钟
+
+    refreshCookieCheckInterval = setInterval(async () => {
+        checkCount++;
+
+        if (checkCount > maxChecks) {
+            clearInterval(refreshCookieCheckInterval);
+            refreshCookieCheckInterval = null;
+            toggleLoading(false);
+            showToast('刷新Cookie超时，请重试', 'warning');
+            return;
+        }
+
+        try {
+            const response = await fetch(`${apiBase}/password-login/check/${sessionId}`, {
+                headers: {
+                    'Authorization': `Bearer ${authToken}`
+                }
+            });
+            const data = await response.json();
+            console.log('刷新Cookie状态检查:', data); // 调试日志
+
+            switch (data.status) {
+                case 'processing':
+                    // 处理中，更新状态显示
+                    updateRefreshCookieStatus('正在登录中，请稍候...');
+                    break;
+                case 'verification_required':
+                    // 需要人脸认证，显示验证截图或链接
+                    updateRefreshCookieStatus('需要人脸验证，请查看弹出的验证窗口');
+                    // 使用账号密码登录的验证显示函数
+                    showPasswordLoginQRCode(data.screenshot_path || data.verification_url || data.qr_code_url, data.screenshot_path);
+                    break;
+                case 'success':
+                    clearInterval(refreshCookieCheckInterval);
+                    refreshCookieCheckInterval = null;
+                    toggleLoading(false);
+                    showToast(`账号 ${cookieId} Cookie刷新成功！`, 'success');
+                    // 隐藏表单
+                    document.getElementById('refreshCookieForm').style.display = 'none';
+                    // 刷新账号列表
+                    loadCookies();
+                    break;
+                case 'failed':
+                case 'error':
+                case 'not_found':
+                case 'forbidden':
+                    clearInterval(refreshCookieCheckInterval);
+                    refreshCookieCheckInterval = null;
+                    toggleLoading(false);
+                    showToast(`刷新失败: ${data.message || data.error || '未知错误'}`, 'danger');
+                    break;
+            }
+        } catch (error) {
+            console.error('检查刷新状态失败:', error);
+        }
+    }, 2000);
 }
 
 // ========================= 账号密码登录相关函数 =========================
@@ -9279,6 +9548,7 @@ async function loadSystemSettings() {
             const registrationSettings = document.getElementById('registration-settings');
             const outgoingConfigs = document.getElementById('outgoing-configs');
             const backupManagement = document.getElementById('backup-management');
+            const systemRestartCard = document.getElementById('system-restart-card');
 
             if (apiSecuritySettings) {
                 apiSecuritySettings.style.display = isAdmin ? 'block' : 'none';
@@ -9291,6 +9561,9 @@ async function loadSystemSettings() {
             }
             if (backupManagement) {
                 backupManagement.style.display = isAdmin ? 'block' : 'none';
+            }
+            if (systemRestartCard) {
+                systemRestartCard.style.display = isAdmin ? 'block' : 'none';
             }
 
             // 如果是管理员，加载所有管理员设置
