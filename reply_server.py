@@ -1809,6 +1809,7 @@ def get_cookies_details(current_user: Dict[str, Any] = Depends(get_current_user)
         # 获取备注信息
         cookie_details = db_manager.get_cookie_details(cookie_id)
         remark = cookie_details.get('remark', '') if cookie_details else ''
+        username = cookie_details.get('username', '') if cookie_details else ''
 
         result.append({
             'id': cookie_id,
@@ -1817,6 +1818,7 @@ def get_cookies_details(current_user: Dict[str, Any] = Depends(get_current_user)
             'auto_confirm': auto_confirm,
             'auto_comment': auto_comment,
             'remark': remark,
+            'username': username,
             'pause_duration': cookie_details.get('pause_duration', 10) if cookie_details else 10
         })
     return result
@@ -2382,6 +2384,23 @@ async def _execute_password_login(session_id: str, account_id: str, account: str
                 password_login_sessions[session_id]['account_id'] = account_id
                 password_login_sessions[session_id]['is_new_account'] = is_new_account
                 password_login_sessions[session_id]['cookie_count'] = len(cookies_dict)
+
+                # 发送登录成功通知
+                try:
+                    from utils.slider_patch import send_notification
+                    login_type = "刷新Cookie" if password_login_sessions[session_id].get('refresh_mode') else "账号密码登录"
+                    notification_title = f"🎉 {login_type}成功"
+                    notification_message = (
+                        f"{login_type}成功\n\n"
+                        f"账号ID: {account_id}\n"
+                        f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                        f"Cookie数量: {len(cookies_dict)}\n\n"
+                        f"账号已可正常使用。"
+                    )
+                    send_notification(account_id, notification_title, notification_message, "success")
+                    log_with_user('info', f"已发送{login_type}成功通知: {account_id}", current_user)
+                except Exception as notify_err:
+                    log_with_user('warning', f"发送登录成功通知失败: {account_id}, 错误: {str(notify_err)}", current_user)
                 
             except Exception as e:
                 error_msg = str(e)
@@ -2422,11 +2441,38 @@ async def password_login(
         account_id = request.get('account_id')
         account = request.get('account')
         password = request.get('password')
+        # 检查前端是否明确指定了 show_browser 参数
+        show_browser_specified = 'show_browser' in request
         show_browser = request.get('show_browser', False)
-        
+        refresh_mode = request.get('refresh_mode', False)  # 刷新模式：从数据库读取账密
+
+        user_id = current_user['user_id']
+
+        # 刷新模式：从数据库读取已保存的账号密码
+        if refresh_mode and account_id:
+            cookie_info = db_manager.get_cookie_details(account_id)
+            if not cookie_info:
+                return {'success': False, 'message': f'未找到账号: {account_id}'}
+
+            # 验证账号归属
+            if cookie_info.get('user_id') != user_id:
+                return {'success': False, 'message': '无权操作此账号'}
+
+            account = cookie_info.get('username')
+            password = cookie_info.get('password')
+
+            if not account or not password:
+                return {'success': False, 'message': '该账号未配置用户名和密码，无法刷新Cookie'}
+
+            # 获取 show_browser 设置（只有当前端没有明确指定时，才使用数据库配置）
+            if not show_browser_specified:
+                show_browser = cookie_info.get('show_browser', False)
+
+            log_with_user('info', f"刷新Cookie模式: {account_id}, 用户名: {account}, show_browser: {show_browser}", current_user)
+
         if not account_id or not account or not password:
             return {'success': False, 'message': '账号ID、登录账号和密码不能为空'}
-        
+
         log_with_user('info', f"开始账号密码登录: {account_id}, 账号: {account}", current_user)
         
         # 生成会话ID
@@ -2441,6 +2487,7 @@ async def password_login(
             'account': account,
             'password': password,
             'show_browser': show_browser,
+            'refresh_mode': refresh_mode,  # 保存刷新模式标志
             'status': 'processing',
             'verification_url': None,
             'screenshot_path': None,
@@ -7285,8 +7332,8 @@ async def restart_application(current_user: Dict[str, Any] = Depends(get_current
     注意：此操作会重启整个应用
     """
     try:
-        # 只允许管理员执行（检查username是否为admin）
-        if current_user.get('username') != 'admin':
+        # 只允许管理员执行
+        if not current_user.get('is_admin'):
             raise HTTPException(status_code=403, detail="只有管理员可以重启应用")
         
         log_with_user('info', "用户请求重启应用", current_user)
