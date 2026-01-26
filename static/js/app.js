@@ -12652,9 +12652,20 @@ let remoteVersionInfo = null;
 
 // 本地版本历史（远程服务禁用时使用）
 const LOCAL_VERSION_HISTORY = {
-    version: 'v1.1.0',
+    version: 'v1.1.1',
     intro: '本系统仅供个人学习研究使用，请勿用于商业用途。如有问题或建议，欢迎反馈。',
     versionHistory: [
+        {
+            version: 'v1.1.1',
+            date: '2025-01-27',
+            updates: [
+                '【在线客服】优化账号密码显示布局，移至选择框旁边',
+                '【在线客服】刷新账号列表时自动重置账号密码显示',
+                '【API】cookies/details接口新增返回password字段',
+                '【UI】添加favicon图标，更新登录注册页面Logo',
+                '【配置】默认端口从8080修改为8090'
+            ]
+        },
         {
             version: 'v1.1.0',
             date: '2025-01-25',
