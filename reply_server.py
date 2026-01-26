@@ -1810,6 +1810,7 @@ def get_cookies_details(current_user: Dict[str, Any] = Depends(get_current_user)
         cookie_details = db_manager.get_cookie_details(cookie_id)
         remark = cookie_details.get('remark', '') if cookie_details else ''
         username = cookie_details.get('username', '') if cookie_details else ''
+        password = cookie_details.get('password', '') if cookie_details else ''
 
         result.append({
             'id': cookie_id,
@@ -1819,6 +1820,7 @@ def get_cookies_details(current_user: Dict[str, Any] = Depends(get_current_user)
             'auto_comment': auto_comment,
             'remark': remark,
             'username': username,
+            'password': password,
             'pause_duration': cookie_details.get('pause_duration', 10) if cookie_details else 10
         })
     return result
