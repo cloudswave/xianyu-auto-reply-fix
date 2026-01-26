@@ -253,3 +253,19 @@ body.sidebar-collapsed .main-content {
 .content-section.active {
   display: block;
 }
+
+/* 在线客服页面特殊样式 - 使用flex布局填满高度 */
+#online-im-section.active {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh);
+}
+
+#online-im-section .content-header {
+  flex-shrink: 0;
+}
+
+#online-im-section .content-body {
+  flex: 1;
+  overflow: hidden;
+}

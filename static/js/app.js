@@ -2723,16 +2723,16 @@ async function checkAuth() {
         backupManagement.style.display = 'block';
         }
 
-        // 显示注册设置功能
-        const registrationSettings = document.getElementById('registration-settings');
-        if (registrationSettings) {
-        registrationSettings.style.display = 'block';
-        }
-
         // 显示系统重启功能
         const systemRestartCard = document.getElementById('system-restart-card');
         if (systemRestartCard) {
-        systemRestartCard.style.display = 'block';
+        systemRestartCard.style.display = 'flex';
+        }
+
+        // 显示登录与注册设置
+        const loginInfoSettings = document.getElementById('login-info-settings');
+        if (loginInfoSettings) {
+        loginInfoSettings.style.display = 'flex';
         }
     }
 
@@ -9637,7 +9637,7 @@ async function loadSystemSettings() {
 
             // 显示/隐藏管理员专用设置（仅管理员可见）
             const apiSecuritySettings = document.getElementById('api-security-settings');
-            const registrationSettings = document.getElementById('registration-settings');
+            const loginInfoSettings = document.getElementById('login-info-settings');
             const outgoingConfigs = document.getElementById('outgoing-configs');
             const backupManagement = document.getElementById('backup-management');
             const systemRestartCard = document.getElementById('system-restart-card');
@@ -9645,8 +9645,8 @@ async function loadSystemSettings() {
             if (apiSecuritySettings) {
                 apiSecuritySettings.style.display = isAdmin ? 'block' : 'none';
             }
-            if (registrationSettings) {
-                registrationSettings.style.display = isAdmin ? 'block' : 'none';
+            if (loginInfoSettings) {
+                loginInfoSettings.style.display = isAdmin ? 'flex' : 'none';
             }
             if (outgoingConfigs) {
                 outgoingConfigs.style.display = isAdmin ? 'block' : 'none';
@@ -9655,7 +9655,7 @@ async function loadSystemSettings() {
                 backupManagement.style.display = isAdmin ? 'block' : 'none';
             }
             if (systemRestartCard) {
-                systemRestartCard.style.display = isAdmin ? 'block' : 'none';
+                systemRestartCard.style.display = isAdmin ? 'flex' : 'none';
             }
 
             // 如果是管理员，加载所有管理员设置
@@ -9669,9 +9669,9 @@ async function loadSystemSettings() {
     } catch (error) {
         console.error('获取用户信息失败:', error);
         // 出错时隐藏管理员功能
-        const registrationSettings = document.getElementById('registration-settings');
-        if (registrationSettings) {
-            registrationSettings.style.display = 'none';
+        const loginInfoSettings = document.getElementById('login-info-settings');
+        if (loginInfoSettings) {
+            loginInfoSettings.style.display = 'none';
         }
     }
 }
@@ -9948,50 +9948,6 @@ async function loadRegistrationSettings() {
     }
 }
 
-// 更新注册设置
-async function updateRegistrationSettings() {
-    const checkbox = document.getElementById('registrationEnabled');
-    const statusDiv = document.getElementById('registrationStatus');
-    const statusText = document.getElementById('registrationStatusText');
-
-    if (!checkbox) return;
-
-    const enabled = checkbox.checked;
-
-    try {
-        const response = await fetch('/registration-settings', {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${authToken}`
-            },
-            body: JSON.stringify({ enabled: enabled })
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            showToast(data.message, 'success');
-
-            // 显示状态信息
-            if (statusDiv && statusText) {
-                statusText.textContent = data.message;
-                statusDiv.style.display = 'block';
-
-                // 3秒后隐藏状态信息
-                setTimeout(() => {
-                    statusDiv.style.display = 'none';
-                }, 3000);
-            }
-        } else {
-            const errorData = await response.json();
-            showToast(`更新失败: ${errorData.detail || '未知错误'}`, 'danger');
-        }
-    } catch (error) {
-        console.error('更新注册设置失败:', error);
-        showToast('更新注册设置失败', 'danger');
-    }
-}
-
 // 加载默认登录信息设置
 async function loadLoginInfoSettings() {
     try {
@@ -10023,8 +9979,9 @@ async function loadLoginInfoSettings() {
     }
 }
 
-// 更新默认登录信息设置
+// 更新登录与注册设置
 async function updateLoginInfoSettings() {
+    const registrationCheckbox = document.getElementById('registrationEnabled');
     const checkbox = document.getElementById('showDefaultLoginInfo');
     const captchaCheckbox = document.getElementById('loginCaptchaEnabled');
     const statusDiv = document.getElementById('loginInfoStatus');
@@ -10032,6 +9989,27 @@ async function updateLoginInfoSettings() {
 
     try {
         let messages = [];
+
+        // 更新用户注册设置
+        if (registrationCheckbox) {
+            const regEnabled = registrationCheckbox.checked;
+            const regResponse = await fetch('/registration-settings', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`
+                },
+                body: JSON.stringify({ enabled: regEnabled })
+            });
+
+            if (regResponse.ok) {
+                messages.push(regEnabled ? '用户注册已开启' : '用户注册已关闭');
+            } else {
+                const errorData = await regResponse.json();
+                showToast(`更新注册设置失败: ${errorData.detail || '未知错误'}`, 'danger');
+                return;
+            }
+        }
 
         // 更新显示默认登录信息设置
         if (checkbox) {

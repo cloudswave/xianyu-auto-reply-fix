@@ -1673,7 +1673,7 @@
 
     <!-- 在线客服内容 -->
     <div id="online-im-section" class="content-section">
-      <div class="content-header">
+      <div class="content-header" style="flex-shrink: 0;">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
           <div>
             <h2 class="mb-0">
@@ -1715,9 +1715,9 @@
           </div>
         </div>
       </div>
-      <div class="content-body p-0">
+      <div class="content-body p-0" style="flex: 1; overflow: hidden;">
         <!-- 内嵌闲鱼IM iframe -->
-        <div class="im-iframe-container" style="height: calc(100vh - 160px); min-height: 600px;">
+        <div class="im-iframe-container" style="height: 100%;">
           <iframe
             id="goofishImIframe"
             src="about:blank"
@@ -1875,10 +1875,11 @@
         <p class="text-muted mb-0">管理系统配置和用户设置</p>
       </div>
       <div class="content-body">
-        <div class="row">
+        <!-- 第一行：密码设置 + 登录与注册设置 -->
+        <div class="row align-items-stretch">
           <!-- 密码设置 -->
-          <div class="col-md-6">
-            <div class="card">
+          <div class="col-md-6 d-flex">
+            <div class="card flex-fill">
               <div class="card-header">
                 <i class="bi bi-shield-lock me-2"></i>密码设置
               </div>
@@ -1904,9 +1905,73 @@
             </div>
           </div>
 
+          <!-- 登录与注册设置 (仅管理员可见) -->
+          <div class="col-md-6 d-flex">
+            <div id="login-info-settings" class="card flex-fill" style="display: none;">
+              <div class="card-header">
+                <i class="bi bi-gear me-2"></i>登录与注册设置
+                <span class="badge bg-warning ms-2">管理员专用</span>
+              </div>
+              <div class="card-body d-flex flex-column">
+                <div class="mb-4">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="registrationEnabled">
+                    <label class="form-check-label" for="registrationEnabled">
+                      <strong>开启用户注册</strong>
+                    </label>
+                  </div>
+                  <div class="form-text">
+                    <i class="bi bi-info-circle me-1"></i>
+                    关闭后，新用户将无法注册账号，登录页面也不会显示注册链接
+                  </div>
+                </div>
+                <div class="mb-4">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="showDefaultLoginInfo">
+                    <label class="form-check-label" for="showDefaultLoginInfo">
+                      <strong>显示默认登录信息</strong>
+                    </label>
+                  </div>
+                  <div class="form-text">
+                    <i class="bi bi-info-circle me-1"></i>
+                    开启后，登录页面将显示默认的用户名和密码信息，方便用户快速登录
+                  </div>
+                </div>
+                <div class="mb-4">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="loginCaptchaEnabled">
+                    <label class="form-check-label" for="loginCaptchaEnabled">
+                      <strong>登录页面安全验证</strong>
+                    </label>
+                  </div>
+                  <div class="form-text">
+                    <i class="bi bi-shield-check me-1"></i>
+                    开启后，用户登录时需要输入图形验证码，提高账号安全性
+                  </div>
+                </div>
+                <div class="mt-auto">
+                  <div id="loginInfoStatus" class="mb-2" style="display: none;">
+                    <div class="alert alert-info mb-0 py-2">
+                      <i class="bi bi-info-circle me-2"></i>
+                      <span id="loginInfoStatusText"></span>
+                    </div>
+                  </div>
+                  <div class="d-grid">
+                    <button type="button" class="btn btn-primary btn-lg" onclick="updateLoginInfoSettings()">
+                      <i class="bi bi-check-circle me-1"></i>保存设置
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 第二行：主题设置 + 系统重启 -->
+        <div class="row align-items-stretch mt-4">
           <!-- 主题设置 -->
-          <div class="col-md-6">
-            <div class="card">
+          <div class="col-md-6 d-flex">
+            <div class="card flex-fill">
               <div class="card-header">
                 <i class="bi bi-palette me-2"></i>主题设置
               </div>
@@ -1931,8 +1996,8 @@
           </div>
 
           <!-- 系统重启 (仅管理员可见) -->
-          <div id="system-restart-card" class="col-md-6 mt-4" style="display: none;">
-            <div class="card">
+          <div class="col-md-6 d-flex">
+            <div id="system-restart-card" class="card flex-fill" style="display: none;">
               <div class="card-header">
                 <i class="bi bi-power me-2"></i>系统重启
                 <span class="badge bg-danger ms-2">管理员专用</span>
@@ -2034,86 +2099,6 @@
                       <i class="bi bi-lightbulb me-1 text-warning"></i>
                       <strong>提示：</strong>请妥善保管API秘钥，避免泄露给未授权的第三方
                     </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 注册设置 (仅管理员可见) -->
-        <div id="registration-settings" class="row mt-4" style="display: none;">
-          <div class="col-md-6">
-            <div class="card">
-              <div class="card-header">
-                <i class="bi bi-person-plus me-2"></i>注册设置
-                <span class="badge bg-warning ms-2">管理员专用</span>
-              </div>
-              <div class="card-body">
-                <div class="mb-3">
-                  <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="registrationEnabled">
-                    <label class="form-check-label" for="registrationEnabled">
-                      <strong>开启用户注册</strong>
-                    </label>
-                  </div>
-                  <div class="form-text">
-                    <i class="bi bi-info-circle me-1"></i>
-                    关闭后，新用户将无法注册账号，登录页面也不会显示注册链接
-                  </div>
-                </div>
-                <button type="button" class="btn btn-primary" onclick="updateRegistrationSettings()">
-                  <i class="bi bi-check-circle me-1"></i>保存设置
-                </button>
-                <div id="registrationStatus" class="mt-3" style="display: none;">
-                  <div class="alert alert-info mb-0">
-                    <i class="bi bi-info-circle me-2"></i>
-                    <span id="registrationStatusText"></span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 默认登录信息设置 -->
-          <div class="col-md-6">
-            <div class="card">
-              <div class="card-header">
-                <i class="bi bi-info-circle me-2"></i>登录信息设置
-                <span class="badge bg-warning ms-2">管理员专用</span>
-              </div>
-              <div class="card-body">
-                <div class="mb-3">
-                  <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="showDefaultLoginInfo">
-                    <label class="form-check-label" for="showDefaultLoginInfo">
-                      <strong>显示默认登录信息</strong>
-                    </label>
-                  </div>
-                  <div class="form-text">
-                    <i class="bi bi-info-circle me-1"></i>
-                    开启后，登录页面将显示默认的用户名和密码信息，方便用户快速登录
-                  </div>
-                </div>
-                <div class="mb-3">
-                  <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="loginCaptchaEnabled">
-                    <label class="form-check-label" for="loginCaptchaEnabled">
-                      <strong>登录页面安全验证</strong>
-                    </label>
-                  </div>
-                  <div class="form-text">
-                    <i class="bi bi-shield-check me-1"></i>
-                    开启后，用户登录时需要输入图形验证码，提高账号安全性
-                  </div>
-                </div>
-                <button type="button" class="btn btn-primary" onclick="updateLoginInfoSettings()">
-                  <i class="bi bi-check-circle me-1"></i>保存设置
-                </button>
-                <div id="loginInfoStatus" class="mt-3" style="display: none;">
-                  <div class="alert alert-info mb-0">
-                    <i class="bi bi-info-circle me-2"></i>
-                    <span id="loginInfoStatusText"></span>
                   </div>
                 </div>
               </div>
@@ -3377,7 +3362,7 @@
 
   <!-- JS依赖 -->
   <script src="/static/lib/bootstrap/bootstrap.bundle.min.js"></script>
-  <script src="/static/js/app.js?v=2.3.1"></script>
+  <script src="/static/js/app.js?v=2.3.5"></script>
 
   <!-- 默认回复管理模态框 -->
   <div class="modal fade" id="defaultReplyModal" tabindex="-1" aria-labelledby="defaultReplyModalLabel" aria-hidden="true">
