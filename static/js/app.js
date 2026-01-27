@@ -10204,10 +10204,12 @@ function filterOrders() {
     const statusFilter = document.getElementById('orderStatusFilter')?.value || '';
 
     filteredOrdersData = allOrdersData.filter(order => {
-        // 搜索关键词筛选（订单ID或商品ID）
+        // 搜索关键词筛选（订单ID、商品ID、买家ID、买家昵称）
         const matchesSearch = !searchKeyword ||
             (order.order_id && order.order_id.toLowerCase().includes(searchKeyword)) ||
-            (order.item_id && order.item_id.toLowerCase().includes(searchKeyword));
+            (order.item_id && order.item_id.toLowerCase().includes(searchKeyword)) ||
+            (order.buyer_id && order.buyer_id.toLowerCase().includes(searchKeyword)) ||
+            (order.buyer_nick && order.buyer_nick.toLowerCase().includes(searchKeyword));
 
         // 状态筛选
         const matchesStatus = !statusFilter || order.order_status === statusFilter;
@@ -10236,7 +10238,7 @@ function displayOrders() {
     if (filteredOrdersData.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="10" class="text-center text-muted py-4">
+                <td colspan="11" class="text-center text-muted py-4">
                     <i class="bi bi-inbox display-6 d-block mb-2"></i>
                     ${currentOrderSearchKeyword ? '没有找到匹配的订单' : '暂无订单数据'}
                 </td>
@@ -10281,6 +10283,11 @@ function createOrderRow(order) {
             <td>
                 <span class="text-truncate d-inline-block" style="max-width: 80px;" title="${order.buyer_id || ''}">
                     ${order.buyer_id || '-'}
+                </span>
+            </td>
+            <td>
+                <span class="text-truncate d-inline-block" style="max-width: 100px;" title="${order.buyer_nick || ''}">
+                    ${order.buyer_nick || '-'}
                 </span>
             </td>
             <td>
@@ -10512,6 +10519,7 @@ async function showOrderDetail(orderId) {
                                         <tr><td>订单ID</td><td>${order.order_id}</td></tr>
                                         <tr><td>商品ID</td><td>${order.item_id || '未知'}</td></tr>
                                         <tr><td>买家ID</td><td>${order.buyer_id || '未知'}</td></tr>
+                                        <tr><td>买家昵称</td><td>${order.buyer_nick || '未知'}</td></tr>
                                         <tr><td>Cookie账号</td><td>${order.cookie_id || '未知'}</td></tr>
                                         <tr><td>订单状态</td><td><span class="badge ${getOrderStatusClass(order.order_status)}">${getOrderStatusText(order.order_status)}</span></td></tr>
                                     </table>
@@ -12665,7 +12673,7 @@ function exportSearchResults() {
 
 
 // 默认版本号（当无法读取 version.txt 时使用）
-const DEFAULT_VERSION = 'v1.1.3';
+const DEFAULT_VERSION = 'v1.1.4';
 
 // 当前本地版本号（动态从 version.txt 读取）
 let LOCAL_VERSION = DEFAULT_VERSION;
@@ -12678,9 +12686,19 @@ let remoteVersionInfo = null;
 
 // 本地版本历史（远程服务禁用时使用）
 const LOCAL_VERSION_HISTORY = {
-    version: 'v1.1.3',
+    version: 'v1.1.4',
     intro: '本系统仅供个人学习研究使用，请勿用于商业用途。如有问题或建议，欢迎反馈。',
     versionHistory: [
+        {
+            version: 'v1.1.4',
+            date: '2026-01-27',
+            updates: [
+                '【订单管理】新增买家昵称列，方便识别买家身份',
+                '【订单管理】订单搜索支持按买家昵称搜索',
+                '【自动补全】买家发消息时自动补全历史订单昵称',
+                '【订单详情】弹窗中显示买家昵称信息'
+            ]
+        },
         {
             version: 'v1.1.3',
             date: '2026-01-27',

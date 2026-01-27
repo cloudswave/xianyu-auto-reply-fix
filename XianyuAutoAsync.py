@@ -1934,7 +1934,7 @@ class XianyuLive:
                     for i in range(quantity_to_send):
                         try:
                             # 每次调用都可能获取不同的内容（API卡券、批量数据等）
-                            delivery_content = await self._auto_delivery(item_id, item_title, order_id, send_user_id, chat_id)
+                            delivery_content = await self._auto_delivery(item_id, item_title, order_id, send_user_id, chat_id, send_user_name)
                             if delivery_content:
                                 delivery_contents.append(delivery_content)
                                 success_count += 1
@@ -5264,7 +5264,7 @@ class XianyuLive:
                 logger.error(f"【{self.cookie_id}】获取订单详情异常: {self._safe_str(e)}")
                 return None
 
-    async def _auto_delivery(self, item_id: str, item_title: str = None, order_id: str = None, send_user_id: str = None, chat_id: str = None):
+    async def _auto_delivery(self, item_id: str, item_title: str = None, order_id: str = None, send_user_id: str = None, chat_id: str = None, send_user_name: str = None):
         """自动发货功能 - 获取卡券规则，执行延时，确认发货，发送内容"""
         try:
             from db_manager import db_manager
@@ -5497,6 +5497,7 @@ class XianyuLive:
                                     order_id=order_id,
                                     item_id=item_id,
                                     buyer_id=send_user_id,
+                                    buyer_nick=send_user_name,
                                     cookie_id=self.cookie_id
                                 )
 
@@ -8968,6 +8969,14 @@ class XianyuLive:
                 except Exception as e:
                     logger.error(f"处理卡片消息异常: {self._safe_str(e)}")
                     # 如果处理异常，继续正常处理流程（会受到暂停影响）
+
+            # 自动更新买家昵称（补全历史订单的昵称信息）
+            if send_user_id and send_user_name:
+                try:
+                    from db_manager import db_manager
+                    db_manager.update_buyer_nick_by_buyer_id(send_user_id, send_user_name, self.cookie_id)
+                except Exception as e:
+                    logger.debug(f"更新买家昵称失败: {self._safe_str(e)}")
 
             # 使用防抖机制处理聊天消息回复
             # 如果用户连续发送消息，等待用户停止发送后再回复最后一条消息

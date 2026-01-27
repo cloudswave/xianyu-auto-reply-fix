@@ -250,6 +250,15 @@ class DBManager:
                 self._execute_sql(cursor, "CREATE INDEX IF NOT EXISTS idx_orders_sid ON orders(sid)")
                 logger.info("orders 表 sid 列添加完成")
 
+            # 检查并添加 buyer_nick 列到 orders 表（用于存储买家昵称）
+            try:
+                self._execute_sql(cursor, "SELECT buyer_nick FROM orders LIMIT 1")
+            except sqlite3.OperationalError:
+                # buyer_nick 列不存在，需要添加
+                logger.info("正在为 orders 表添加 buyer_nick 列...")
+                self._execute_sql(cursor, "ALTER TABLE orders ADD COLUMN buyer_nick TEXT")
+                logger.info("orders 表 buyer_nick 列添加完成")
+
             # 检查并添加 user_id 列（用于数据库迁移）
             try:
                 self._execute_sql(cursor, "SELECT user_id FROM cards LIMIT 1")
@@ -5197,13 +5206,15 @@ class DBManager:
     def insert_or_update_order(self, order_id: str, item_id: str = None, buyer_id: str = None,
                               spec_name: str = None, spec_value: str = None, quantity: str = None,
                               amount: str = None, order_status: str = None, cookie_id: str = None,
-                              sid: str = None, spec_name_2: str = None, spec_value_2: str = None):
+                              sid: str = None, spec_name_2: str = None, spec_value_2: str = None,
+                              buyer_nick: str = None):
         """插入或更新订单信息
 
         Args:
             order_id: 订单ID
             item_id: 商品ID
             buyer_id: 买家ID
+            buyer_nick: 买家昵称
             spec_name: 规格名称
             spec_value: 规格值
             spec_name_2: 规格2名称
@@ -5241,6 +5252,9 @@ class DBManager:
                     if buyer_id is not None:
                         update_fields.append("buyer_id = ?")
                         update_values.append(buyer_id)
+                    if buyer_nick is not None:
+                        update_fields.append("buyer_nick = ?")
+                        update_values.append(buyer_nick)
                     if sid is not None:
                         update_fields.append("sid = ?")
                         update_values.append(sid)
@@ -5279,10 +5293,10 @@ class DBManager:
                 else:
                     # 插入新订单
                     cursor.execute('''
-                    INSERT INTO orders (order_id, item_id, buyer_id, sid, spec_name, spec_value,
+                    INSERT INTO orders (order_id, item_id, buyer_id, buyer_nick, sid, spec_name, spec_value,
                                       spec_name_2, spec_value_2, quantity, amount, order_status, cookie_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (order_id, item_id, buyer_id, sid, spec_name, spec_value,
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (order_id, item_id, buyer_id, buyer_nick, sid, spec_name, spec_value,
                           spec_name_2, spec_value_2, quantity, amount, order_status or 'unknown', cookie_id))
                     logger.info(f"插入新订单: {order_id}")
 
@@ -5300,7 +5314,7 @@ class DBManager:
             try:
                 cursor = self.conn.cursor()
                 cursor.execute('''
-                SELECT order_id, item_id, buyer_id, sid, spec_name, spec_value,
+                SELECT order_id, item_id, buyer_id, buyer_nick, sid, spec_name, spec_value,
                        spec_name_2, spec_value_2, quantity, amount, order_status, cookie_id, created_at, updated_at
                 FROM orders WHERE order_id = ?
                 ''', (order_id,))
@@ -5311,17 +5325,18 @@ class DBManager:
                         'order_id': row[0],
                         'item_id': row[1],
                         'buyer_id': row[2],
-                        'sid': row[3],
-                        'spec_name': row[4],
-                        'spec_value': row[5],
-                        'spec_name_2': row[6],
-                        'spec_value_2': row[7],
-                        'quantity': row[8],
-                        'amount': row[9],
-                        'order_status': row[10],
-                        'cookie_id': row[11],
-                        'created_at': row[12],
-                        'updated_at': row[13]
+                        'buyer_nick': row[3],
+                        'sid': row[4],
+                        'spec_name': row[5],
+                        'spec_value': row[6],
+                        'spec_name_2': row[7],
+                        'spec_value_2': row[8],
+                        'quantity': row[9],
+                        'amount': row[10],
+                        'order_status': row[11],
+                        'cookie_id': row[12],
+                        'created_at': row[13],
+                        'updated_at': row[14]
                     }
                 return None
 
@@ -5335,7 +5350,7 @@ class DBManager:
             try:
                 cursor = self.conn.cursor()
                 cursor.execute('''
-                SELECT order_id, item_id, buyer_id, sid, spec_name, spec_value,
+                SELECT order_id, item_id, buyer_id, buyer_nick, sid, spec_name, spec_value,
                        spec_name_2, spec_value_2, quantity, amount, order_status, created_at, updated_at
                 FROM orders WHERE cookie_id = ?
                 ORDER BY created_at DESC LIMIT ?
@@ -5347,16 +5362,17 @@ class DBManager:
                         'order_id': row[0],
                         'item_id': row[1],
                         'buyer_id': row[2],
-                        'sid': row[3],
-                        'spec_name': row[4],
-                        'spec_value': row[5],
-                        'spec_name_2': row[6],
-                        'spec_value_2': row[7],
-                        'quantity': row[8],
-                        'amount': row[9],
-                        'order_status': row[10],
-                        'created_at': row[11],
-                        'updated_at': row[12]
+                        'buyer_nick': row[3],
+                        'sid': row[4],
+                        'spec_name': row[5],
+                        'spec_value': row[6],
+                        'spec_name_2': row[7],
+                        'spec_value_2': row[8],
+                        'quantity': row[9],
+                        'amount': row[10],
+                        'order_status': row[11],
+                        'created_at': row[12],
+                        'updated_at': row[13]
                     })
 
                 return orders
@@ -5364,6 +5380,51 @@ class DBManager:
             except Exception as e:
                 logger.error(f"获取Cookie订单列表失败: {cookie_id} - {e}")
                 return []
+
+    def update_buyer_nick_by_buyer_id(self, buyer_id: str, buyer_nick: str, cookie_id: str = None):
+        """根据买家ID更新所有相关订单的买家昵称
+
+        当收到买家消息时调用此方法，自动补全该买家所有订单的昵称
+
+        Args:
+            buyer_id: 买家用户ID
+            buyer_nick: 买家昵称
+            cookie_id: Cookie ID（可选，用于限定账号）
+
+        Returns:
+            int: 更新的订单数量
+        """
+        if not buyer_id or not buyer_nick:
+            return 0
+
+        with self.lock:
+            try:
+                cursor = self.conn.cursor()
+
+                # 只更新 buyer_nick 为空的订单
+                if cookie_id:
+                    cursor.execute('''
+                    UPDATE orders SET buyer_nick = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE buyer_id = ? AND cookie_id = ? AND (buyer_nick IS NULL OR buyer_nick = '')
+                    ''', (buyer_nick, buyer_id, cookie_id))
+                else:
+                    cursor.execute('''
+                    UPDATE orders SET buyer_nick = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE buyer_id = ? AND (buyer_nick IS NULL OR buyer_nick = '')
+                    ''', (buyer_nick, buyer_id))
+
+                updated_count = cursor.rowcount
+                self.conn.commit()
+
+                if updated_count > 0:
+                    logger.info(f"已更新买家 {buyer_id} 的 {updated_count} 个订单昵称为: {buyer_nick}")
+
+                return updated_count
+
+            except Exception as e:
+                logger.error(f"更新买家昵称失败: buyer_id={buyer_id} - {e}")
+                self.conn.rollback()
+                return 0
 
     def get_recent_order_by_buyer_id(self, buyer_id: str, cookie_id: str = None, status: str = None, minutes: int = 10):
         """根据买家ID获取最近的订单信息
@@ -5400,7 +5461,7 @@ class DBManager:
                 where_clause = " AND ".join(conditions)
                 
                 cursor.execute(f'''
-                SELECT order_id, item_id, buyer_id, sid, spec_name, spec_value,
+                SELECT order_id, item_id, buyer_id, buyer_nick, sid, spec_name, spec_value,
                        spec_name_2, spec_value_2, quantity, amount, order_status, cookie_id, created_at, updated_at
                 FROM orders
                 WHERE {where_clause}
@@ -5415,17 +5476,18 @@ class DBManager:
                         'order_id': row[0],
                         'item_id': row[1],
                         'buyer_id': row[2],
-                        'sid': row[3],
-                        'spec_name': row[4],
-                        'spec_value': row[5],
-                        'spec_name_2': row[6],
-                        'spec_value_2': row[7],
-                        'quantity': row[8],
-                        'amount': row[9],
-                        'order_status': row[10],
-                        'cookie_id': row[11],
-                        'created_at': row[12],
-                        'updated_at': row[13]
+                        'buyer_nick': row[3],
+                        'sid': row[4],
+                        'spec_name': row[5],
+                        'spec_value': row[6],
+                        'spec_name_2': row[7],
+                        'spec_value_2': row[8],
+                        'quantity': row[9],
+                        'amount': row[10],
+                        'order_status': row[11],
+                        'cookie_id': row[12],
+                        'created_at': row[13],
+                        'updated_at': row[14]
                     }
                 
                 logger.warning(f"未找到买家 {buyer_id} 的最近订单 (cookie_id={cookie_id}, status={status}, minutes={minutes})")
@@ -5476,7 +5538,7 @@ class DBManager:
                 where_clause = " AND ".join(conditions)
                 
                 sql = f'''
-                SELECT order_id, item_id, buyer_id, sid, spec_name, spec_value,
+                SELECT order_id, item_id, buyer_id, buyer_nick, sid, spec_name, spec_value,
                        spec_name_2, spec_value_2, quantity, amount, order_status, cookie_id, created_at, updated_at
                 FROM orders
                 WHERE {where_clause}
@@ -5504,17 +5566,18 @@ class DBManager:
                         'order_id': row[0],
                         'item_id': row[1],
                         'buyer_id': row[2],
-                        'sid': row[3],
-                        'spec_name': row[4],
-                        'spec_value': row[5],
-                        'spec_name_2': row[6],
-                        'spec_value_2': row[7],
-                        'quantity': row[8],
-                        'amount': row[9],
-                        'order_status': row[10],
-                        'cookie_id': row[11],
-                        'created_at': row[12],
-                        'updated_at': row[13]
+                        'buyer_nick': row[3],
+                        'sid': row[4],
+                        'spec_name': row[5],
+                        'spec_value': row[6],
+                        'spec_name_2': row[7],
+                        'spec_value_2': row[8],
+                        'quantity': row[9],
+                        'amount': row[10],
+                        'order_status': row[11],
+                        'cookie_id': row[12],
+                        'created_at': row[13],
+                        'updated_at': row[14]
                     }
                 
                 logger.warning(f"未找到sid {sid} 的最近订单 (cookie_id={cookie_id}, status={status}, minutes={minutes})")
