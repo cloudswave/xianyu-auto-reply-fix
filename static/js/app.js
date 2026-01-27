@@ -5853,42 +5853,96 @@ async function deleteDeliveryRule(ruleId) {
 
 // ==================== 系统设置功能 ====================
 
-// 主题颜色映射
-const themeColors = {
-    blue: '#4f46e5',
-    green: '#10b981',
-    purple: '#8b5cf6',
-    red: '#ef4444',
-    orange: '#f59e0b'
-};
-
 // 加载用户设置
 async function loadUserSettings() {
     try {
-    const response = await fetch(`${apiBase}/user-settings`, {
-        headers: {
-        'Authorization': `Bearer ${authToken}`
-        }
-    });
+        const response = await fetch(`${apiBase}/user-settings`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
 
-    if (response.ok) {
-        const settings = await response.json();
+        if (response.ok) {
+            const settings = await response.json();
 
-        // 设置主题颜色
-        if (settings.theme_color && settings.theme_color.value) {
-        document.getElementById('themeColor').value = settings.theme_color.value;
-        applyThemeColor(settings.theme_color.value);
+            // 设置主题颜色
+            if (settings.theme_color && settings.theme_color.value) {
+                const color = settings.theme_color.value;
+                const picker = document.getElementById('themeColorPicker');
+                const hex = document.getElementById('themeColorHex');
+                if (picker) picker.value = color;
+                if (hex) hex.value = color;
+                applyThemeColor(color);
+            }
+
+            // 设置背景
+            if (settings.bg_type && settings.bg_type.value) {
+                const bgType = settings.bg_type.value;
+                const radio = document.getElementById('bgType' + bgType.charAt(0).toUpperCase() + bgType.slice(1));
+                if (radio) radio.checked = true;
+                onBgTypeChange();
+            }
+
+            if (settings.bg_color && settings.bg_color.value) {
+                const color = settings.bg_color.value;
+                const picker = document.getElementById('bgSolidColor');
+                const hex = document.getElementById('bgSolidColorHex');
+                if (picker) picker.value = color;
+                if (hex) hex.value = color;
+            }
+
+            if (settings.bg_gradient_start && settings.bg_gradient_start.value) {
+                const picker = document.getElementById('bgGradientStart');
+                if (picker) picker.value = settings.bg_gradient_start.value;
+            }
+
+            if (settings.bg_gradient_end && settings.bg_gradient_end.value) {
+                const picker = document.getElementById('bgGradientEnd');
+                if (picker) picker.value = settings.bg_gradient_end.value;
+            }
+
+            if (settings.bg_gradient_direction && settings.bg_gradient_direction.value) {
+                const select = document.getElementById('bgGradientDirection');
+                if (select) select.value = settings.bg_gradient_direction.value;
+            }
+
+            if (settings.bg_image_url && settings.bg_image_url.value) {
+                const input = document.getElementById('bgImageUrl');
+                if (input) input.value = settings.bg_image_url.value;
+            }
+
+            if (settings.bg_image_blur && settings.bg_image_blur.value) {
+                const slider = document.getElementById('bgImageBlur');
+                const label = document.getElementById('bgBlurValue');
+                if (slider) slider.value = settings.bg_image_blur.value;
+                if (label) label.textContent = settings.bg_image_blur.value + 'px';
+            }
+
+            if (settings.bg_image_overlay && settings.bg_image_overlay.value) {
+                const slider = document.getElementById('bgImageOverlay');
+                const label = document.getElementById('bgOverlayValue');
+                if (slider) slider.value = settings.bg_image_overlay.value;
+                if (label) label.textContent = settings.bg_image_overlay.value + '%';
+            }
+
+            if (settings.bg_scope && settings.bg_scope.value) {
+                const scope = settings.bg_scope.value;
+                const radio = document.getElementById('bgScope' + scope.charAt(0).toUpperCase() + scope.slice(1));
+                if (radio) radio.checked = true;
+            }
+
+            // 应用背景设置
+            applyBackground();
         }
-    }
     } catch (error) {
-    console.error('加载用户设置失败:', error);
+        console.error('加载用户设置失败:', error);
     }
 }
 
-// 应用主题颜色
-function applyThemeColor(colorName) {
-    const color = themeColors[colorName];
-    if (color) {
+// 应用主题颜色（支持任意十六进制颜色）
+function applyThemeColor(color) {
+    if (!color || !color.startsWith('#')) return;
+
     document.documentElement.style.setProperty('--primary-color', color);
 
     // 计算hover颜色（稍微深一点）
@@ -5896,9 +5950,8 @@ function applyThemeColor(colorName) {
     document.documentElement.style.setProperty('--primary-hover', hoverColor);
 
     // 计算浅色版本（用于某些UI元素）
-    const lightColor = adjustBrightness(color, 10);
+    const lightColor = adjustBrightness(color, 40);
     document.documentElement.style.setProperty('--primary-light', lightColor);
-    }
 }
 
 // 调整颜色亮度
@@ -5909,44 +5962,228 @@ function adjustBrightness(hex, percent) {
     const G = (num >> 8 & 0x00FF) + amt;
     const B = (num & 0x0000FF) + amt;
     return "#" + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
-    (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
-    (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
+        (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
+        (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
+}
+
+// 背景类型切换
+function onBgTypeChange() {
+    const bgType = document.querySelector('input[name="bgType"]:checked')?.value || 'none';
+
+    // 隐藏所有配置
+    document.getElementById('bgSolidConfig').style.display = 'none';
+    document.getElementById('bgGradientConfig').style.display = 'none';
+    document.getElementById('bgImageConfig').style.display = 'none';
+    document.getElementById('bgScopeConfig').style.display = 'none';
+
+    // 显示对应配置
+    if (bgType === 'solid') {
+        document.getElementById('bgSolidConfig').style.display = 'block';
+        document.getElementById('bgScopeConfig').style.display = 'block';
+    } else if (bgType === 'gradient') {
+        document.getElementById('bgGradientConfig').style.display = 'block';
+        document.getElementById('bgScopeConfig').style.display = 'block';
+    } else if (bgType === 'image') {
+        document.getElementById('bgImageConfig').style.display = 'block';
+        document.getElementById('bgScopeConfig').style.display = 'block';
+    }
+}
+
+// 应用背景设置
+function applyBackground() {
+    const bgType = document.querySelector('input[name="bgType"]:checked')?.value || 'none';
+    const bgScope = document.querySelector('input[name="bgScope"]:checked')?.value || 'content';
+
+    // 清除现有背景
+    const mainContent = document.getElementById('main-content');
+    const body = document.body;
+
+    // 移除背景容器
+    const existingBg = document.getElementById('custom-bg-container');
+    if (existingBg) existingBg.remove();
+
+    if (bgType === 'none') {
+        if (mainContent) mainContent.style.background = '';
+        body.style.background = '';
+        return;
+    }
+
+    let bgStyle = '';
+
+    if (bgType === 'solid') {
+        const color = document.getElementById('bgSolidColor')?.value || '#f0f2f5';
+        bgStyle = color;
+    } else if (bgType === 'gradient') {
+        const start = document.getElementById('bgGradientStart')?.value || '#667eea';
+        const end = document.getElementById('bgGradientEnd')?.value || '#764ba2';
+        const direction = document.getElementById('bgGradientDirection')?.value || 'to bottom';
+        bgStyle = `linear-gradient(${direction}, ${start}, ${end})`;
+    } else if (bgType === 'image') {
+        const url = document.getElementById('bgImageUrl')?.value;
+        const blur = document.getElementById('bgImageBlur')?.value || 0;
+        const overlay = document.getElementById('bgImageOverlay')?.value || 30;
+
+        if (url) {
+            // 创建背景容器（用于模糊和遮罩效果）
+            const bgContainer = document.createElement('div');
+            bgContainer.id = 'custom-bg-container';
+            bgContainer.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                z-index: -1;
+                background: url('${url}') center/cover no-repeat;
+                filter: blur(${blur}px);
+            `;
+
+            // 遮罩层
+            const overlayDiv = document.createElement('div');
+            overlayDiv.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                z-index: -1;
+                background: rgba(255, 255, 255, ${overlay / 100});
+            `;
+            bgContainer.appendChild(overlayDiv);
+
+            if (bgScope === 'full') {
+                body.appendChild(bgContainer);
+                if (mainContent) mainContent.style.background = 'transparent';
+            } else {
+                if (mainContent) {
+                    mainContent.style.position = 'relative';
+                    mainContent.style.overflow = 'hidden';
+                    bgContainer.style.position = 'absolute';
+                    mainContent.insertBefore(bgContainer, mainContent.firstChild);
+                }
+            }
+            return;
+        }
+    }
+
+    // 应用纯色或渐变背景
+    if (bgScope === 'full') {
+        body.style.background = bgStyle;
+        if (mainContent) mainContent.style.background = 'transparent';
+    } else {
+        body.style.background = '';
+        if (mainContent) mainContent.style.background = bgStyle;
+    }
 }
 
 // 主题表单提交处理
 document.addEventListener('DOMContentLoaded', function() {
-    const themeForm = document.getElementById('themeForm');
-    if (themeForm) {
-    themeForm.addEventListener('submit', async function(e) {
-        e.preventDefault();
+    // 颜色选择器同步
+    const themeColorPicker = document.getElementById('themeColorPicker');
+    const themeColorHex = document.getElementById('themeColorHex');
 
-        const selectedColor = document.getElementById('themeColor').value;
-
-        try {
-        const response = await fetch(`${apiBase}/user-settings/theme_color`, {
-            method: 'PUT',
-            headers: {
-            'Authorization': `Bearer ${authToken}`,
-            'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-            value: selectedColor,
-            description: '主题颜色'
-            })
+    if (themeColorPicker && themeColorHex) {
+        themeColorPicker.addEventListener('input', function() {
+            themeColorHex.value = this.value;
+            applyThemeColor(this.value);
         });
 
-        if (response.ok) {
-            applyThemeColor(selectedColor);
-            showToast('主题颜色应用成功', 'success');
-        } else {
-            const error = await response.text();
-            showToast(`主题设置失败: ${error}`, 'danger');
-        }
-        } catch (error) {
-        console.error('主题设置失败:', error);
-        showToast('主题设置失败', 'danger');
-        }
+        themeColorHex.addEventListener('input', function() {
+            if (/^#[0-9A-Fa-f]{6}$/.test(this.value)) {
+                themeColorPicker.value = this.value;
+                applyThemeColor(this.value);
+            }
+        });
+    }
+
+    // 背景纯色选择器同步
+    const bgSolidColor = document.getElementById('bgSolidColor');
+    const bgSolidColorHex = document.getElementById('bgSolidColorHex');
+
+    if (bgSolidColor && bgSolidColorHex) {
+        bgSolidColor.addEventListener('input', function() {
+            bgSolidColorHex.value = this.value;
+            applyBackground();
+        });
+
+        bgSolidColorHex.addEventListener('input', function() {
+            if (/^#[0-9A-Fa-f]{6}$/.test(this.value)) {
+                bgSolidColor.value = this.value;
+                applyBackground();
+            }
+        });
+    }
+
+    // 渐变颜色实时预览
+    ['bgGradientStart', 'bgGradientEnd', 'bgGradientDirection'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', applyBackground);
     });
+
+    // 图片背景实时预览
+    ['bgImageUrl', 'bgImageBlur', 'bgImageOverlay'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', applyBackground);
+    });
+
+    // 应用范围切换
+    document.querySelectorAll('input[name="bgScope"]').forEach(radio => {
+        radio.addEventListener('change', applyBackground);
+    });
+
+    const themeForm = document.getElementById('themeForm');
+    if (themeForm) {
+        themeForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const themeColor = document.getElementById('themeColorHex')?.value || '#4f46e5';
+            const bgType = document.querySelector('input[name="bgType"]:checked')?.value || 'none';
+            const bgScope = document.querySelector('input[name="bgScope"]:checked')?.value || 'content';
+
+            // 保存主题颜色
+            const settings = [
+                { key: 'theme_color', value: themeColor, description: '主题颜色' },
+                { key: 'bg_type', value: bgType, description: '背景类型' },
+                { key: 'bg_scope', value: bgScope, description: '背景范围' }
+            ];
+
+            // 根据背景类型添加额外设置
+            if (bgType === 'solid') {
+                settings.push({ key: 'bg_color', value: document.getElementById('bgSolidColor')?.value || '#f0f2f5', description: '背景颜色' });
+            } else if (bgType === 'gradient') {
+                settings.push({ key: 'bg_gradient_start', value: document.getElementById('bgGradientStart')?.value || '#667eea', description: '渐变起始色' });
+                settings.push({ key: 'bg_gradient_end', value: document.getElementById('bgGradientEnd')?.value || '#764ba2', description: '渐变结束色' });
+                settings.push({ key: 'bg_gradient_direction', value: document.getElementById('bgGradientDirection')?.value || 'to bottom', description: '渐变方向' });
+            } else if (bgType === 'image') {
+                settings.push({ key: 'bg_image_url', value: document.getElementById('bgImageUrl')?.value || '', description: '背景图片URL' });
+                settings.push({ key: 'bg_image_blur', value: document.getElementById('bgImageBlur')?.value || '0', description: '背景模糊度' });
+                settings.push({ key: 'bg_image_overlay', value: document.getElementById('bgImageOverlay')?.value || '30', description: '遮罩透明度' });
+            }
+
+            try {
+                // 保存所有设置
+                for (const setting of settings) {
+                    await fetch(`${apiBase}/user-settings/${setting.key}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            value: setting.value,
+                            description: setting.description
+                        })
+                    });
+                }
+
+                applyThemeColor(themeColor);
+                applyBackground();
+                showToast('主题设置保存成功', 'success');
+            } catch (error) {
+                console.error('主题设置失败:', error);
+                showToast('主题设置失败', 'danger');
+            }
+        });
     }
 
     // 密码表单提交处理
