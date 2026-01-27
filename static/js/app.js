@@ -5927,8 +5927,8 @@ function updatePresetSelection(selectedColor) {
 
 // ==================== 菜单管理功能 ====================
 
-// 菜单项配置
-const MENU_ITEMS = [
+// 菜单项配置（默认顺序）
+const DEFAULT_MENU_ITEMS = [
     { id: 'dashboard', name: '仪表盘', icon: 'bi-speedometer2', required: true },
     { id: 'accounts', name: '账号管理', icon: 'bi-person-circle', required: false },
     { id: 'items', name: '商品管理', icon: 'bi-box-seam', required: false },
@@ -5944,56 +5944,161 @@ const MENU_ITEMS = [
     { id: 'about', name: '关于', icon: 'bi-info-circle', required: false }
 ];
 
-// 当前菜单设置（默认全部显示）
-let menuSettings = {};
+// 当前菜单设置
+let menuSettings = {};  // 显示/隐藏设置
+let menuOrder = [];     // 菜单顺序
+let draggedItem = null; // 当前拖拽的元素
+
+// 获取排序后的菜单项
+function getSortedMenuItems() {
+    if (menuOrder.length === 0) {
+        return [...DEFAULT_MENU_ITEMS];
+    }
+
+    // 按保存的顺序排列
+    const sorted = [];
+    menuOrder.forEach(id => {
+        const item = DEFAULT_MENU_ITEMS.find(m => m.id === id);
+        if (item) sorted.push(item);
+    });
+
+    // 添加可能遗漏的新菜单项
+    DEFAULT_MENU_ITEMS.forEach(item => {
+        if (!sorted.find(m => m.id === item.id)) {
+            sorted.push(item);
+        }
+    });
+
+    return sorted;
+}
 
 // 初始化菜单管理UI
 function initMenuManagement() {
     const container = document.getElementById('menuManagementList');
     if (!container) return;
 
-    container.innerHTML = MENU_ITEMS.map(item => `
-        <div class="col-md-4 col-sm-6 mb-2">
-            <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" id="menu-${item.id}"
-                    ${item.required ? 'checked disabled' : 'checked'}
-                    data-menu-id="${item.id}">
-                <label class="form-check-label" for="menu-${item.id}">
-                    <i class="bi ${item.icon} me-1"></i>${item.name}
-                    ${item.required ? '<span class="badge bg-secondary ms-1">必选</span>' : ''}
-                </label>
+    const sortedItems = getSortedMenuItems();
+
+    container.innerHTML = sortedItems.map(item => `
+        <div class="menu-sort-item" draggable="true" data-menu-id="${item.id}">
+            <span class="drag-handle">
+                <i class="bi bi-grip-vertical"></i>
+            </span>
+            <span class="menu-icon">
+                <i class="bi ${item.icon}"></i>
+            </span>
+            <span class="menu-name">${item.name}</span>
+            ${item.required ? '<span class="badge bg-secondary">必选</span>' : ''}
+            <div class="menu-checkbox">
+                <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" id="menu-${item.id}"
+                        ${item.required ? 'checked disabled' : (menuSettings[item.id] !== false ? 'checked' : '')}
+                        data-menu-id="${item.id}">
+                </div>
             </div>
         </div>
     `).join('');
 
-    // 应用已保存的设置
-    applyMenuCheckboxes();
+    // 绑定拖拽事件
+    initDragAndDrop();
 }
 
-// 应用菜单复选框状态
-function applyMenuCheckboxes() {
-    MENU_ITEMS.forEach(item => {
-        const checkbox = document.getElementById(`menu-${item.id}`);
-        if (checkbox && !item.required) {
-            const isVisible = menuSettings[item.id] !== false; // 默认显示
-            checkbox.checked = isVisible;
-        }
+// 初始化拖拽功能
+function initDragAndDrop() {
+    const container = document.getElementById('menuManagementList');
+    if (!container) return;
+
+    const items = container.querySelectorAll('.menu-sort-item');
+
+    items.forEach(item => {
+        item.addEventListener('dragstart', handleDragStart);
+        item.addEventListener('dragend', handleDragEnd);
+        item.addEventListener('dragover', handleDragOver);
+        item.addEventListener('dragenter', handleDragEnter);
+        item.addEventListener('dragleave', handleDragLeave);
+        item.addEventListener('drop', handleDrop);
     });
 }
 
-// 保存菜单设置
+function handleDragStart(e) {
+    draggedItem = this;
+    this.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', this.innerHTML);
+}
+
+function handleDragEnd(e) {
+    this.classList.remove('dragging');
+    document.querySelectorAll('.menu-sort-item').forEach(item => {
+        item.classList.remove('drag-over');
+    });
+    draggedItem = null;
+}
+
+function handleDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    return false;
+}
+
+function handleDragEnter(e) {
+    if (this !== draggedItem) {
+        this.classList.add('drag-over');
+    }
+}
+
+function handleDragLeave(e) {
+    this.classList.remove('drag-over');
+}
+
+function handleDrop(e) {
+    e.stopPropagation();
+    e.preventDefault();
+
+    if (draggedItem !== this) {
+        const container = document.getElementById('menuManagementList');
+        const items = Array.from(container.querySelectorAll('.menu-sort-item'));
+        const draggedIndex = items.indexOf(draggedItem);
+        const targetIndex = items.indexOf(this);
+
+        if (draggedIndex < targetIndex) {
+            this.parentNode.insertBefore(draggedItem, this.nextSibling);
+        } else {
+            this.parentNode.insertBefore(draggedItem, this);
+        }
+    }
+
+    this.classList.remove('drag-over');
+    return false;
+}
+
+// 获取当前菜单顺序
+function getCurrentMenuOrder() {
+    const container = document.getElementById('menuManagementList');
+    if (!container) return [];
+
+    const items = container.querySelectorAll('.menu-sort-item');
+    return Array.from(items).map(item => item.dataset.menuId);
+}
+
+// 保存菜单设置（包括顺序和显示/隐藏）
 async function saveMenuSettings() {
-    const settings = {};
-    MENU_ITEMS.forEach(item => {
+    // 获取显示/隐藏设置
+    const visibility = {};
+    DEFAULT_MENU_ITEMS.forEach(item => {
         if (!item.required) {
             const checkbox = document.getElementById(`menu-${item.id}`);
             if (checkbox) {
-                settings[item.id] = checkbox.checked;
+                visibility[item.id] = checkbox.checked;
             }
         }
     });
 
+    // 获取顺序
+    const order = getCurrentMenuOrder();
+
     try {
+        // 保存显示设置
         await fetch(`${apiBase}/user-settings/menu_visibility`, {
             method: 'PUT',
             headers: {
@@ -6001,13 +6106,27 @@ async function saveMenuSettings() {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                value: JSON.stringify(settings),
+                value: JSON.stringify(visibility),
                 description: '菜单显示设置'
             })
         });
 
-        menuSettings = settings;
-        applyMenuVisibility();
+        // 保存顺序设置
+        await fetch(`${apiBase}/user-settings/menu_order`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                value: JSON.stringify(order),
+                description: '菜单顺序设置'
+            })
+        });
+
+        menuSettings = visibility;
+        menuOrder = order;
+        applyMenuSettings();
         showToast('菜单设置保存成功', 'success');
     } catch (error) {
         console.error('保存菜单设置失败:', error);
@@ -6017,18 +6136,8 @@ async function saveMenuSettings() {
 
 // 重置菜单设置
 async function resetMenuSettings() {
-    // 重置所有复选框为选中状态
-    MENU_ITEMS.forEach(item => {
-        const checkbox = document.getElementById(`menu-${item.id}`);
-        if (checkbox && !item.required) {
-            checkbox.checked = true;
-        }
-    });
-
-    // 清空设置（全部显示）
-    menuSettings = {};
-
     try {
+        // 重置显示设置
         await fetch(`${apiBase}/user-settings/menu_visibility`, {
             method: 'PUT',
             headers: {
@@ -6041,7 +6150,25 @@ async function resetMenuSettings() {
             })
         });
 
-        applyMenuVisibility();
+        // 重置顺序设置
+        await fetch(`${apiBase}/user-settings/menu_order`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                value: JSON.stringify([]),
+                description: '菜单顺序设置'
+            })
+        });
+
+        menuSettings = {};
+        menuOrder = [];
+
+        // 重新初始化UI
+        initMenuManagement();
+        applyMenuSettings();
         showToast('菜单设置已恢复默认', 'success');
     } catch (error) {
         console.error('重置菜单设置失败:', error);
@@ -6049,17 +6176,53 @@ async function resetMenuSettings() {
     }
 }
 
-// 应用菜单显示/隐藏
-function applyMenuVisibility() {
-    MENU_ITEMS.forEach(item => {
-        if (item.required) return; // 必选项始终显示
+// 应用菜单设置（顺序和显示/隐藏）
+function applyMenuSettings() {
+    const sidebar = document.querySelector('.sidebar-nav');
+    if (!sidebar) return;
 
-        const isVisible = menuSettings[item.id] !== false;
-        const menuItem = document.querySelector(`.nav-item[data-menu-id="${item.id}"]`);
+    const sortedItems = getSortedMenuItems();
+
+    // 按顺序重新排列侧边栏菜单（普通菜单项使用 0-99）
+    sortedItems.forEach((item, index) => {
+        const menuItem = sidebar.querySelector(`.nav-item[data-menu-id="${item.id}"]`);
         if (menuItem) {
-            menuItem.style.display = isVisible ? '' : 'none';
+            // 设置显示/隐藏
+            if (!item.required) {
+                const isVisible = menuSettings[item.id] !== false;
+                menuItem.style.display = isVisible ? '' : 'none';
+            }
+
+            // 设置顺序（通过CSS order属性）
+            menuItem.style.order = index;
         }
     });
+
+    // 确保管理员菜单区块在普通菜单之后（order: 100）
+    const adminSection = document.getElementById('adminMenuSection');
+    if (adminSection) {
+        adminSection.style.order = 100;
+    }
+
+    // 底部分隔符和登出按钮在最后（order: 200+）
+    const dividers = sidebar.querySelectorAll('.nav-divider');
+    dividers.forEach((divider, idx) => {
+        // 跳过管理员区块内的分隔符
+        if (!divider.closest('#adminMenuSection')) {
+            divider.style.order = 200 + idx;
+        }
+    });
+
+    // 登出按钮（没有data-menu-id的nav-item）在最后
+    const logoutItem = sidebar.querySelector('.nav-item:not([data-menu-id])');
+    if (logoutItem) {
+        logoutItem.style.order = 999;
+    }
+}
+
+// 兼容旧函数名
+function applyMenuVisibility() {
+    applyMenuSettings();
 }
 
 // 加载菜单设置
@@ -6073,6 +6236,8 @@ async function loadMenuSettings() {
 
         if (response.ok) {
             const settings = await response.json();
+
+            // 加载显示设置
             if (settings.menu_visibility && settings.menu_visibility.value) {
                 try {
                     menuSettings = JSON.parse(settings.menu_visibility.value);
@@ -6080,7 +6245,17 @@ async function loadMenuSettings() {
                     menuSettings = {};
                 }
             }
-            applyMenuVisibility();
+
+            // 加载顺序设置
+            if (settings.menu_order && settings.menu_order.value) {
+                try {
+                    menuOrder = JSON.parse(settings.menu_order.value);
+                } catch (e) {
+                    menuOrder = [];
+                }
+            }
+
+            applyMenuSettings();
         }
     } catch (error) {
         console.error('加载菜单设置失败:', error);
