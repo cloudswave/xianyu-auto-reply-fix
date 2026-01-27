@@ -170,7 +170,7 @@
             <p class="text-muted mb-0">系统概览和统计信息</p>
           </div>
           <div class="version-info d-flex gap-2">
-            <span class="badge bg-secondary" id="systemVersion">
+            <span class="badge bg-secondary" id="systemVersion" style="cursor: pointer;" onclick="showChangelogModal()" title="点击查看更新日志">
               <i class="bi bi-info-circle me-1"></i>
               版本: <span id="versionNumber">加载中...</span>
             </span>
@@ -4032,6 +4032,26 @@
             </div>
             <p class="text-muted">正在加载滑块验证...</p>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 更新日志模态框 -->
+  <div class="modal fade" id="changelogModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi bi-clock-history me-2"></i>更新日志
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" id="changelogContent">
+          <!-- 动态加载更新日志内容 -->
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
         </div>
       </div>
     </div>

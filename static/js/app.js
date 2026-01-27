@@ -13440,6 +13440,145 @@ async function showUpdateInfo(newVersion) {
 // =============================================================================
 
 /**
+ * 显示更新日志弹窗
+ */
+function showChangelogModal() {
+    const changelogContent = document.getElementById('changelogContent');
+    if (!changelogContent) return;
+
+    // 更新日志数据
+    const changelog = [
+        {
+            version: 'v1.1.7',
+            date: '2026-01-28',
+            changes: [
+                { type: 'feature', text: '菜单管理: 新增拖拽排序功能' },
+                { type: 'feature', text: '按住拖动图标可调整菜单顺序' },
+                { type: 'feature', text: '菜单顺序自动保存到用户配置' },
+                { type: 'feature', text: '版本信息: 点击版本号可查看更新日志' },
+                { type: 'optimize', text: '侧边栏: 使用CSS order属性实现菜单重排序' },
+                { type: 'fix', text: '修复菜单排序后管理员功能和登出按钮位置错乱的问题' }
+            ]
+        },
+        {
+            version: 'v1.1.6',
+            date: '2026-01-27',
+            changes: [
+                { type: 'feature', text: '菜单管理: 新增侧边栏菜单显示/隐藏功能' },
+                { type: 'feature', text: '在系统设置中可自定义显示哪些菜单项' }
+            ]
+        },
+        {
+            version: 'v1.1.5',
+            date: '2026-01-27',
+            changes: [
+                { type: 'feature', text: '主题设置: 新增主题颜色自定义功能' },
+                { type: 'feature', text: '提供9种预设颜色，支持自定义任意颜色' },
+                { type: 'optimize', text: '系统设置界面简化，操作更直观' }
+            ]
+        },
+        {
+            version: 'v1.1.4',
+            date: '2026-01-27',
+            changes: [
+                { type: 'feature', text: '订单管理: 新增买家昵称列' },
+                { type: 'feature', text: '订单搜索支持按买家昵称搜索' },
+                { type: 'optimize', text: '数据库: 自动迁移添加 buyer_nick 字段' }
+            ]
+        },
+        {
+            version: 'v1.1.3',
+            date: '2026-01-27',
+            changes: [
+                { type: 'optimize', text: '系统设置: 优化"登录与注册设置"卡片布局' }
+            ]
+        },
+        {
+            version: 'v1.1.2',
+            date: '2026-01-27',
+            changes: [
+                { type: 'optimize', text: '在线客服: 修复页面底部白色空白区域问题' },
+                { type: 'optimize', text: '系统设置: 重新组织页面布局' }
+            ]
+        },
+        {
+            version: 'v1.1.1',
+            date: '2026-01-27',
+            changes: [
+                { type: 'feature', text: '在线客服: 优化账号密码显示布局' },
+                { type: 'feature', text: 'API: cookies/details 接口新增返回 password 字段' },
+                { type: 'optimize', text: 'UI: 添加 favicon 图标' }
+            ]
+        },
+        {
+            version: 'v1.1.0',
+            date: '2026-01-25',
+            changes: [
+                { type: 'feature', text: '添加登录页面验证码开关功能' },
+                { type: 'feature', text: '优化订单管理功能' },
+                { type: 'feature', text: '添加手动发货和刷新订单状态功能' },
+                { type: 'fix', text: '修复自动发货模块语法错误导致账号无法启动的问题' }
+            ]
+        },
+        {
+            version: 'v1.0.0',
+            date: '2026-01-24',
+            changes: [
+                { type: 'feature', text: '闲鱼自动回复系统初始版本' }
+            ]
+        }
+    ];
+
+    // 生成HTML
+    const html = changelog.map(release => {
+        const changesHtml = release.changes.map(change => {
+            let icon, color;
+            switch (change.type) {
+                case 'feature':
+                    icon = 'bi-plus-circle-fill';
+                    color = '#28a745';
+                    break;
+                case 'optimize':
+                    icon = 'bi-arrow-up-circle-fill';
+                    color = '#17a2b8';
+                    break;
+                case 'fix':
+                    icon = 'bi-wrench';
+                    color = '#dc3545';
+                    break;
+                default:
+                    icon = 'bi-dot';
+                    color = '#6c757d';
+            }
+            return `
+                <div class="d-flex align-items-start mb-2">
+                    <i class="bi ${icon} me-2" style="color: ${color}; margin-top: 3px;"></i>
+                    <span>${change.text}</span>
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <div class="changelog-version mb-4">
+                <div class="d-flex align-items-center mb-2">
+                    <span class="badge bg-primary me-2">${release.version}</span>
+                    <small class="text-muted">${release.date}</small>
+                </div>
+                <div class="ps-2 border-start border-2" style="border-color: var(--primary-color) !important;">
+                    ${changesHtml}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    changelogContent.innerHTML = html;
+
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('changelogModal'));
+    modal.show();
+}
+
+/**
  * 显示最新权益弹窗
  */
 async function showBenefitsModal() {
