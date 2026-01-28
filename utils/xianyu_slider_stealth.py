@@ -3584,18 +3584,18 @@ class XianyuSliderStealth:
 
                 # 如果不是第一次尝试，使用渐进式等待策略
                 if attempt > 1:
-                    # 🔧 2026-01-28 优化：大幅增加冷却时间，刷新页面获取新滑块
-                    # 第2次等待5-8秒，第3次等待8-12秒
-                    base_delay = 5.0 + (attempt - 1) * 3.0  # 基础5秒，每次增加3秒
-                    retry_delay = random.uniform(base_delay, base_delay + 3.0)
-                    logger.info(f"【{self.pure_user_id}】⏳ 冷却等待{retry_delay:.1f}秒后重试（防止触发反爬）...")
+                    # 🔧 2026-01-28 优化：刷新页面获取新滑块，适当等待
+                    # 第2次等待2-3秒，第3次等待3-4秒
+                    base_delay = 2.0 + (attempt - 1) * 1.0  # 基础2秒，每次增加1秒
+                    retry_delay = random.uniform(base_delay, base_delay + 1.0)
+                    logger.info(f"【{self.pure_user_id}】⏳ 等待{retry_delay:.1f}秒后刷新重试...")
                     time.sleep(retry_delay)
 
                     # 🔑 关键修复：刷新页面获取新的滑块挑战（提高重试成功率）
                     logger.info(f"【{self.pure_user_id}】🔄 刷新页面获取新的滑块挑战...")
                     try:
                         self.page.reload(wait_until='networkidle', timeout=15000)
-                        time.sleep(1.5)  # 等待页面稳定
+                        time.sleep(1.0)  # 等待页面稳定
                         logger.info(f"【{self.pure_user_id}】✅ 页面刷新完成，准备重新检测滑块")
                     except Exception as refresh_error:
                         logger.warning(f"【{self.pure_user_id}】⚠️ 页面刷新失败: {refresh_error}，尝试点击重置")
