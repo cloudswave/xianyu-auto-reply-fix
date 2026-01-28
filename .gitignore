@@ -374,11 +374,9 @@ check_disk_usage.py
 !.env.example
 .env.docker
 
-# === 滑块验证模块配置（二进制分发）===
-# 源代码已移到私有仓库，主项目不再包含源文件
-utils/xianyu_slider_stealth.py
-
-# 但允许跟踪二进制扩展模块（用于分发）
+# === 滑块验证模块配置 ===
+# 允许跟踪源代码和二进制扩展模块
+!utils/xianyu_slider_stealth.py
 !utils/xianyu_slider_stealth*.pyd
 !utils/xianyu_slider_stealth*.so
 !utils/xianyu_slider_stealth.pyi
