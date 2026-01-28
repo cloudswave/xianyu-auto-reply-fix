@@ -5,6 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>闲鱼自动回复管理系统</title>
   <link rel="icon" type="image/png" href="/static/favicon.png">
+  <!-- 在渲染前立即设置主题，避免闪烁 -->
+  <script>
+    (function() {
+      var savedMode = localStorage.getItem('darkMode');
+      if (savedMode === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="/static/lib/bootstrap/bootstrap.min.css">
   <link rel="stylesheet" href="/static/lib/bootstrap-icons/bootstrap-icons.css">
 
