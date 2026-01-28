@@ -178,6 +178,47 @@ function initSidebarCollapse() {
 }
 
 // ================================
+// 暗色模式功能
+// ================================
+
+// 切换暗色模式
+function toggleDarkMode() {
+    const html = document.documentElement;
+    const icon = document.getElementById('darkModeIcon');
+    const isDark = html.getAttribute('data-theme') === 'dark';
+
+    if (isDark) {
+        html.removeAttribute('data-theme');
+        localStorage.setItem('darkMode', 'light');
+        if (icon) {
+            icon.classList.remove('bi-sun-fill');
+            icon.classList.add('bi-moon-fill');
+        }
+    } else {
+        html.setAttribute('data-theme', 'dark');
+        localStorage.setItem('darkMode', 'dark');
+        if (icon) {
+            icon.classList.remove('bi-moon-fill');
+            icon.classList.add('bi-sun-fill');
+        }
+    }
+}
+
+// 初始化暗色模式
+function initDarkMode() {
+    const savedMode = localStorage.getItem('darkMode');
+    const icon = document.getElementById('darkModeIcon');
+
+    if (savedMode === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        if (icon) {
+            icon.classList.remove('bi-moon-fill');
+            icon.classList.add('bi-sun-fill');
+        }
+    }
+}
+
+// ================================
 // 【仪表盘菜单】相关功能
 // ================================
 
@@ -2753,6 +2794,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 初始化侧边栏折叠状态
     initSidebarCollapse();
+    // 初始化暗色模式
+    initDarkMode();
     // 加载系统版本号
     loadSystemVersion();
     // 启动验证会话监控

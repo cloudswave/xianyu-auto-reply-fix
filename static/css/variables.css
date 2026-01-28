@@ -15,12 +15,166 @@
     --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+
+    /* 暗色模式变量 */
+    --bg-color: #f8fafc;
+    --bg-secondary: #ffffff;
+    --text-color: #1f2937;
+    --text-secondary: #6b7280;
+    --card-bg: #ffffff;
+    --input-bg: #ffffff;
+    --input-border: #d1d5db;
+    --table-stripe: rgba(0, 0, 0, 0.02);
+    --modal-bg: #ffffff;
+  }
+
+  /* 暗色模式 */
+  [data-theme="dark"] {
+    --bg-color: #0f172a;
+    --bg-secondary: #1e293b;
+    --text-color: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --card-bg: #1e293b;
+    --input-bg: #334155;
+    --input-border: #475569;
+    --border-color: #334155;
+    --light-color: #1e293b;
+    --dark-color: #f1f5f9;
+    --table-stripe: rgba(255, 255, 255, 0.02);
+    --modal-bg: #1e293b;
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
   }
 
   body {
     font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: #f8fafc;
+    background: var(--bg-color);
+    color: var(--text-color);
     min-height: 100vh;
     padding: 0;
     margin: 0;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  /* 暗色模式下的通用样式覆盖 */
+  [data-theme="dark"] .card {
+    background: var(--card-bg);
+    border-color: var(--border-color);
+  }
+
+  [data-theme="dark"] .form-control,
+  [data-theme="dark"] .form-select {
+    background-color: var(--input-bg);
+    border-color: var(--input-border);
+    color: var(--text-color);
+  }
+
+  [data-theme="dark"] .form-control:focus,
+  [data-theme="dark"] .form-select:focus {
+    background-color: var(--input-bg);
+    border-color: var(--primary-color);
+    color: var(--text-color);
+  }
+
+  [data-theme="dark"] .form-control::placeholder {
+    color: var(--text-secondary);
+  }
+
+  [data-theme="dark"] .table {
+    color: var(--text-color);
+  }
+
+  [data-theme="dark"] .table > :not(caption) > * > * {
+    background-color: var(--card-bg);
+    border-color: var(--border-color);
+    color: var(--text-color);
+  }
+
+  [data-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd) > * {
+    background-color: var(--table-stripe);
+  }
+
+  [data-theme="dark"] .modal-content {
+    background-color: var(--modal-bg);
+    border-color: var(--border-color);
+    color: var(--text-color);
+  }
+
+  [data-theme="dark"] .modal-header {
+    border-color: var(--border-color);
+  }
+
+  [data-theme="dark"] .modal-footer {
+    border-color: var(--border-color);
+  }
+
+  [data-theme="dark"] .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+  }
+
+  [data-theme="dark"] .dropdown-menu {
+    background-color: var(--card-bg);
+    border-color: var(--border-color);
+  }
+
+  [data-theme="dark"] .dropdown-item {
+    color: var(--text-color);
+  }
+
+  [data-theme="dark"] .dropdown-item:hover {
+    background-color: var(--input-bg);
+  }
+
+  [data-theme="dark"] .list-group-item {
+    background-color: var(--card-bg);
+    border-color: var(--border-color);
+    color: var(--text-color);
+  }
+
+  [data-theme="dark"] .badge.bg-light {
+    background-color: var(--input-bg) !important;
+    color: var(--text-color) !important;
+  }
+
+  [data-theme="dark"] .text-muted {
+    color: var(--text-secondary) !important;
+  }
+
+  [data-theme="dark"] .border {
+    border-color: var(--border-color) !important;
+  }
+
+  [data-theme="dark"] hr {
+    border-color: var(--border-color);
+  }
+
+  [data-theme="dark"] .bg-white {
+    background-color: var(--card-bg) !important;
+  }
+
+  [data-theme="dark"] .bg-light {
+    background-color: var(--bg-secondary) !important;
+  }
+
+  /* 暗色模式下的主内容区域 */
+  [data-theme="dark"] .main-content {
+    background: var(--bg-color);
+  }
+
+  [data-theme="dark"] .content-header {
+    background: var(--card-bg);
+    border-color: var(--border-color);
+  }
+
+  /* 暗色模式下的统计卡片 */
+  [data-theme="dark"] .stat-card {
+    background: var(--card-bg);
+  }
+
+  /* 暗色模式下的输入框组 */
+  [data-theme="dark"] .input-group-text {
+    background-color: var(--input-bg);
+    border-color: var(--input-border);
+    color: var(--text-color);
   }
