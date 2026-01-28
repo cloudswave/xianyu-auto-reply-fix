@@ -8541,6 +8541,20 @@ class XianyuLive:
                 elif red_reminder == '交易关闭':
                     user_url = f'https://www.goofish.com/personal?userId={user_id}'
                     logger.info(f'[{msg_time}] 【{self.cookie_id}】[{msg_id}] 【系统】买家 {user_url} 交易关闭')
+
+                    # 【修复】更新订单状态到数据库
+                    if self.order_status_handler:
+                        try:
+                            self.order_status_handler.handle_red_reminder_order_status(
+                                red_reminder=red_reminder,
+                                message=message,
+                                user_id=user_id,
+                                cookie_id=self.cookie_id,
+                                msg_time=msg_time
+                            )
+                        except Exception as e:
+                            logger.error(f"【{self.cookie_id}】更新交易关闭订单状态失败: {self._safe_str(e)}")
+
                     logger.info(f"【{self.cookie_id}】[{msg_id}] ⏹️ 处理结束（交易关闭）")
                     return
                 elif red_reminder == '等待卖家发货':
