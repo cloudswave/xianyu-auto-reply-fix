@@ -13091,7 +13091,7 @@ function exportSearchResults() {
 
 
 // 默认版本号（当无法读取 version.txt 时使用）
-const DEFAULT_VERSION = 'v1.1.7';
+const DEFAULT_VERSION = 'v1.2.2';
 
 // 当前本地版本号（动态从 version.txt 读取）
 let LOCAL_VERSION = DEFAULT_VERSION;
@@ -13104,9 +13104,51 @@ let remoteVersionInfo = null;
 
 // 本地版本历史（远程服务禁用时使用）
 const LOCAL_VERSION_HISTORY = {
-    version: 'v1.1.7',
+    version: 'v1.2.2',
     intro: '本系统仅供个人学习研究使用，请勿用于商业用途。如有问题或建议，欢迎反馈。',
     versionHistory: [
+        {
+            version: 'v1.2.2',
+            date: '2026-01-29',
+            updates: [
+                '【修复】修复下单时买家昵称提取错误的问题',
+                '【修复】修复点击导航链接会刷新页面的问题',
+                '【修复】修复暗色模式刷新页面闪烁问题',
+                '【修复】修复递归搜索误提取tradeId等非商品ID的问题',
+                '【修复】修复订单管理商品ID提取错误的问题'
+            ]
+        },
+        {
+            version: 'v1.2.1',
+            date: '2026-01-28',
+            updates: [
+                '【新功能】新增暗色模式支持，可在系统设置中切换主题',
+                '【新功能】下单时自动获取并保存买家昵称'
+            ]
+        },
+        {
+            version: 'v1.2.0',
+            date: '2026-01-28',
+            updates: [
+                '【优化】大幅优化滑块验证重试策略',
+                '【优化】缩短滑块验证重试等待时间'
+            ]
+        },
+        {
+            version: 'v1.1.9',
+            date: '2026-01-28',
+            updates: [
+                '【修复】修复交易关闭时订单状态不更新的问题'
+            ]
+        },
+        {
+            version: 'v1.1.8',
+            date: '2026-01-28',
+            updates: [
+                '【优化】优化滑块验证策略',
+                '【新功能】添加滑块验证优化代码'
+            ]
+        },
         {
             version: 'v1.1.7',
             date: '2026-01-28',
@@ -13525,6 +13567,48 @@ function showChangelogModal() {
 
     // 更新日志数据
     const changelog = [
+        {
+            version: 'v1.2.2',
+            date: '2026-01-29',
+            changes: [
+                { type: 'fix', text: '修复下单时买家昵称提取错误的问题' },
+                { type: 'fix', text: '修复点击导航链接会刷新页面的问题' },
+                { type: 'fix', text: '修复暗色模式刷新页面闪烁问题' },
+                { type: 'fix', text: '修复递归搜索误提取tradeId等非商品ID的问题' },
+                { type: 'fix', text: '修复订单管理商品ID提取错误的问题' }
+            ]
+        },
+        {
+            version: 'v1.2.1',
+            date: '2026-01-28',
+            changes: [
+                { type: 'feature', text: '新增暗色模式支持，可在系统设置中切换主题' },
+                { type: 'feature', text: '下单时自动获取并保存买家昵称' }
+            ]
+        },
+        {
+            version: 'v1.2.0',
+            date: '2026-01-28',
+            changes: [
+                { type: 'optimize', text: '大幅优化滑块验证重试策略' },
+                { type: 'optimize', text: '缩短滑块验证重试等待时间' }
+            ]
+        },
+        {
+            version: 'v1.1.9',
+            date: '2026-01-28',
+            changes: [
+                { type: 'fix', text: '修复交易关闭时订单状态不更新的问题' }
+            ]
+        },
+        {
+            version: 'v1.1.8',
+            date: '2026-01-28',
+            changes: [
+                { type: 'optimize', text: '优化滑块验证策略' },
+                { type: 'feature', text: '添加滑块验证优化代码' }
+            ]
+        },
         {
             version: 'v1.1.7',
             date: '2026-01-28',
