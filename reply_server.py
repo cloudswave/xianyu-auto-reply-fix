@@ -2263,12 +2263,14 @@ async def _execute_password_login(session_id: str, account_id: str, account: str
                 
                 # 保存账号密码和Cookie到数据库
                 # 使用 update_cookie_account_info 来保存，它会自动处理新账号和现有账号的情况
+                # 注意：刷新模式下不更新 show_browser，避免临时调试选项被永久保存
+                is_refresh_mode = password_login_sessions.get(session_id, {}).get('refresh_mode', False)
                 update_success = db_manager.update_cookie_account_info(
                     account_id,
                     cookie_value=cookies_str,
                     username=account,
                     password=password,
-                    show_browser=show_browser,
+                    show_browser=show_browser if not is_refresh_mode else None,  # 刷新模式不更新此字段
                     user_id=user_id  # 新账号时需要提供user_id
                 )
                 
