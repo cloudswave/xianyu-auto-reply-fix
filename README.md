@@ -8,8 +8,8 @@
 
 ## 原始项目
 
-https://github.com/zhinianboke-new/xianyu-auto-reply
-本项目基于以上项目老马二开的版本
+>https://github.com/zhinianboke-new/xianyu-auto-reply
+>本项目基于以上项目老马二开的版本
 
 ## 📋 项目概述
 
