@@ -1740,13 +1740,13 @@ class XianyuLive:
                     return
                 
                 # 【关键】先执行自动确认发货
-                logger.info(f'[{msg_time}] 【{self.cookie_id}】[{msg_id}] 📦 开始自动确认发货: order_id={order_id}')
-                confirm_result = await self.auto_confirm(order_id, item_id)
+                # logger.info(f'[{msg_time}] 【{self.cookie_id}】[{msg_id}] 📦 开始自动确认发货: order_id={order_id}')
+                # confirm_result = await self.auto_confirm(order_id, item_id)
                 
-                if not confirm_result.get('success'):
-                    error_msg = confirm_result.get('error', '未知错误')
-                    logger.warning(f'[{msg_time}] 【{self.cookie_id}】[{msg_id}] ❌ 自动确认发货失败: {error_msg}，不执行自动发货')
-                    return
+                # if not confirm_result.get('success'):
+                #     error_msg = confirm_result.get('error', '未知错误')
+                #     logger.warning(f'[{msg_time}] 【{self.cookie_id}】[{msg_id}] ❌ 自动确认发货失败: {error_msg}，不执行自动发货')
+                #     return
                 
                 logger.info(f'[{msg_time}] 【{self.cookie_id}】[{msg_id}] ✅ 自动确认发货成功，订单ID: {order_id}')
                 
@@ -4385,7 +4385,7 @@ class XianyuLive:
             data = {
                 "msgtype": "markdown",
                 "markdown": {
-                    "title": "闲鱼自动回复通知",
+                    "title": "闲鱼管理系统通知",
                     "text": message
                 }
             }
@@ -4487,7 +4487,7 @@ class XianyuLive:
             # 解析配置
             server_url = config_data.get('server_url', 'https://api.day.app').rstrip('/')
             device_key = config_data.get('device_key', '')
-            title = config_data.get('title', '闲鱼自动回复通知')
+            title = config_data.get('title', '闲鱼管理系统通知')
             sound = config_data.get('sound', 'default')
             icon = config_data.get('icon', '')
             group = config_data.get('group', 'xianyu')
@@ -4584,7 +4584,7 @@ class XianyuLive:
             msg = MIMEMultipart()
             msg['From'] = email_user
             msg['To'] = recipient_email
-            msg['Subject'] = "闲鱼自动回复通知"
+            msg['Subject'] = "闲鱼管理系统通知"
 
             # 添加邮件正文
             msg.attach(MIMEText(message, 'plain', 'utf-8'))
@@ -5277,7 +5277,7 @@ class XianyuLive:
         try:
             from db_manager import db_manager
 
-            logger.info(f"开始自动发货检查: 商品ID={item_id}")
+            logger.info(f"开始自动发货检查: 商品ID={item_id} {self.cookie_id}")
 
             # 获取商品详细信息
             item_info = None
@@ -5464,7 +5464,13 @@ class XianyuLive:
                 else:
                     # 检查确认发货冷却时间
                     current_time = time.time()
-                    should_confirm = True
+                    should_confirm = False
+
+                    # 规则备注包含“立即确认”关键字，则立即确认发货
+                    description = rule.get('description', '')
+                    if "立即确认" in description:
+                        logger.info(f"发货规则备注包含立即确认关键字，将立即确认发货: {description}")
+                        should_confirm = True
 
                     if order_id in self.confirmed_orders:
                         last_confirm_time = self.confirmed_orders[order_id]
