@@ -2236,8 +2236,9 @@ async def _execute_password_login(session_id: str, account_id: str, account: str
         
         # 调用登录方法（同步方法，需要在后台线程中执行）
         import threading
-        
+
         def run_login():
+            from db_manager import db_manager  # 在函数开头导入，避免作用域问题
             try:
                 cookies_dict = slider_instance.login_with_password_playwright(
                     account=account,
@@ -2389,18 +2390,45 @@ async def _execute_password_login(session_id: str, account_id: str, account: str
                 password_login_sessions[session_id]['is_new_account'] = is_new_account
                 password_login_sessions[session_id]['cookie_count'] = len(cookies_dict)
 
-                # 发送登录成功通知
+                # 发送登录成功通知（使用模板系统）
                 try:
                     from utils.slider_patch import send_notification
-                    login_type = "刷新Cookie" if password_login_sessions[session_id].get('refresh_mode') else "账号密码登录"
+                    from db_manager import db_manager
+
+                    # 根据模式选择不同模板
+                    is_refresh_mode = password_login_sessions[session_id].get('refresh_mode')
+                    template_type = 'cookie_refresh_success' if is_refresh_mode else 'password_login_success'
+
+                    # 获取模板
+                    template_data = db_manager.get_notification_template(template_type)
+                    if template_data and template_data.get('template'):
+                        template = template_data['template']
+                    else:
+                        if is_refresh_mode:
+                            template = '''✅ 刷新Cookie成功
+
+账号: {account_id}
+时间: {time}
+Cookie数量: {cookie_count}
+
+账号已可正常使用。'''
+                        else:
+                            template = '''✅ 密码登录成功
+
+账号: {account_id}
+时间: {time}
+Cookie数量: {cookie_count}
+
+账号Cookie已更新，正在重启服务...'''
+
+                    # 格式化模板
+                    notification_message = template.replace('{account_id}', account_id)
+                    notification_message = notification_message.replace('{time}', time.strftime('%Y-%m-%d %H:%M:%S'))
+                    notification_message = notification_message.replace('{cookie_count}', str(len(cookies_dict)))
+
+                    login_type = "刷新Cookie" if is_refresh_mode else "密码登录"
                     notification_title = f"🎉 {login_type}成功"
-                    notification_message = (
-                        f"{login_type}成功\n\n"
-                        f"账号ID: {account_id}\n"
-                        f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                        f"Cookie数量: {len(cookies_dict)}\n\n"
-                        f"账号已可正常使用。"
-                    )
+
                     send_notification(account_id, notification_title, notification_message, "success")
                     log_with_user('info', f"已发送{login_type}成功通知: {account_id}", current_user)
                 except Exception as notify_err:
@@ -3421,6 +3449,365 @@ def delete_message_notification(notification_id: int, current_user: Dict[str, An
             return {'msg': 'message notification deleted'}
         else:
             raise HTTPException(status_code=404, detail='通知配置不存在')
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ------------------------- 通知模板接口 -------------------------
+
+@app.get('/notification-templates')
+def get_notification_templates(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """获取所有通知模板"""
+    from db_manager import db_manager
+    try:
+        templates = db_manager.get_all_notification_templates()
+        return {'templates': templates}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class TestNotificationIn(BaseModel):
+    template_type: str
+    template: str
+
+
+@app.post('/notification-templates/test')
+async def test_notification_template(data: TestNotificationIn, current_user: Dict[str, Any] = Depends(get_current_user)):
+    """发送测试通知"""
+    import time as time_module
+    import aiohttp
+    from db_manager import db_manager
+
+    try:
+        if data.template_type not in ['message', 'token_refresh', 'delivery', 'slider_success', 'face_verify', 'password_login_success', 'cookie_refresh_success']:
+            raise HTTPException(status_code=400, detail='无效的模板类型')
+
+        # 获取所有已启用的通知渠道
+        channels = db_manager.get_notification_channels()
+        logger.info(f"获取到的通知渠道: {channels}")
+        enabled_channels = [c for c in channels if c.get('enabled', False)]
+        logger.info(f"已启用的通知渠道: {enabled_channels}")
+
+        if not enabled_channels:
+            raise HTTPException(status_code=400, detail='没有已启用的通知渠道，请先在「通知渠道」页面配置')
+
+        # 准备测试数据
+        test_data = {
+            'message': {
+                'account_id': '测试账号',
+                'buyer_name': '测试买家',
+                'buyer_id': '123456789',
+                'item_id': '987654321',
+                'chat_id': 'test_chat_001',
+                'message': '这是一条测试消息',
+                'time': time_module.strftime('%Y-%m-%d %H:%M:%S')
+            },
+            'token_refresh': {
+                'account_id': '测试账号',
+                'time': time_module.strftime('%Y-%m-%d %H:%M:%S'),
+                'error_message': '这是一条测试异常信息',
+                'verification_url': 'https://example.com/verify'
+            },
+            'delivery': {
+                'account_id': '测试账号',
+                'buyer_name': '测试买家',
+                'buyer_id': '234567890',
+                'item_id': '876543210',
+                'chat_id': 'test_chat_002',
+                'result': '测试发货成功',
+                'time': time_module.strftime('%Y-%m-%d %H:%M:%S')
+            },
+            'slider_success': {
+                'account_id': '测试账号',
+                'time': time_module.strftime('%Y-%m-%d %H:%M:%S')
+            },
+            'face_verify': {
+                'account_id': '测试账号',
+                'time': time_module.strftime('%Y-%m-%d %H:%M:%S'),
+                'verification_url': 'https://passport.goofish.com/mini_login.htm?example=test'
+            },
+            'password_login_success': {
+                'account_id': '测试账号',
+                'time': time_module.strftime('%Y-%m-%d %H:%M:%S'),
+                'cookie_count': '30'
+            },
+            'cookie_refresh_success': {
+                'account_id': '测试账号',
+                'time': time_module.strftime('%Y-%m-%d %H:%M:%S'),
+                'cookie_count': '30'
+            }
+        }
+
+        # 格式化模板
+        template = data.template
+        for key, value in test_data.get(data.template_type, {}).items():
+            template = template.replace(f'{{{key}}}', str(value))
+
+        # 发送测试通知到所有已启用的渠道
+        success_channels = []
+        failed_channels = []
+
+        for channel in enabled_channels:
+            channel_type = channel.get('type', '')
+            channel_name = channel.get('name', channel_type)
+            config_str = channel.get('config', '{}')
+            logger.info(f"处理通知渠道: name={channel_name}, type={channel_type}, config={config_str}")
+
+            try:
+                import json
+                config_data = json.loads(config_str) if isinstance(config_str, str) else config_str
+                logger.info(f"解析后的配置: {config_data}")
+
+                # 根据渠道类型发送通知
+                if channel_type == 'feishu' or channel_type == 'lark':
+                    webhook_url = config_data.get('webhook_url', '')
+                    secret = config_data.get('secret', '')
+                    logger.info(f"飞书渠道配置: webhook_url={webhook_url}, has_secret={bool(secret)}")
+                    if webhook_url:
+                        import hmac
+                        import hashlib
+                        import base64
+
+                        # 生成签名（按照实际发送逻辑）
+                        timestamp = str(int(time_module.time()))
+                        sign = ""
+
+                        if secret:
+                            string_to_sign = f'{timestamp}\n{secret}'
+                            hmac_code = hmac.new(
+                                string_to_sign.encode('utf-8'),
+                                ''.encode('utf-8'),
+                                digestmod=hashlib.sha256
+                            ).digest()
+                            sign = base64.b64encode(hmac_code).decode('utf-8')
+                            logger.info(f"飞书签名: timestamp={timestamp}")
+
+                        # 构建请求数据
+                        payload = {
+                            "msg_type": "text",
+                            "content": {
+                                "text": f"【测试通知】\n\n{template}"
+                            },
+                            "timestamp": timestamp
+                        }
+
+                        if sign:
+                            payload["sign"] = sign
+
+                        logger.info(f"发送飞书通知: {payload}")
+                        timeout = aiohttp.ClientTimeout(total=10)
+                        async with aiohttp.ClientSession(timeout=timeout) as session:
+                            async with session.post(webhook_url, json=payload) as resp:
+                                resp_text = await resp.text()
+                                logger.info(f"飞书响应: status={resp.status}, body={resp_text}")
+                                if resp.status == 200:
+                                    try:
+                                        resp_json = json.loads(resp_text)
+                                        if resp_json.get('code', 0) == 0:
+                                            success_channels.append(channel_name)
+                                        else:
+                                            failed_channels.append(f"{channel_name} ({resp_json.get('msg', resp_text[:50])})")
+                                    except:
+                                        success_channels.append(channel_name)
+                                else:
+                                    failed_channels.append(f"{channel_name} (HTTP {resp.status}: {resp_text[:50]})")
+                    else:
+                        failed_channels.append(f"{channel_name} (未配置webhook_url)")
+
+                elif channel_type == 'dingtalk' or channel_type == 'ding_talk':
+                    webhook_url = config_data.get('webhook_url', '')
+                    if webhook_url:
+                        payload = {
+                            "msgtype": "text",
+                            "text": {
+                                "content": f"【测试通知】\n\n{template}"
+                            }
+                        }
+                        timeout = aiohttp.ClientTimeout(total=10)
+                        async with aiohttp.ClientSession(timeout=timeout) as session:
+                            async with session.post(webhook_url, json=payload) as resp:
+                                resp_text = await resp.text()
+                                logger.info(f"钉钉响应: status={resp.status}, body={resp_text}")
+                                if resp.status == 200:
+                                    success_channels.append(channel_name)
+                                else:
+                                    failed_channels.append(f"{channel_name} (HTTP {resp.status})")
+
+                elif channel_type == 'bark':
+                    server_url = config_data.get('server_url', 'https://api.day.app')
+                    device_key = config_data.get('device_key', '')
+                    if device_key:
+                        import urllib.parse
+                        encoded_template = urllib.parse.quote(template)
+                        url = f"{server_url}/{device_key}/测试通知/{encoded_template}"
+                        timeout = aiohttp.ClientTimeout(total=10)
+                        async with aiohttp.ClientSession(timeout=timeout) as session:
+                            async with session.get(url) as resp:
+                                if resp.status == 200:
+                                    success_channels.append(channel_name)
+                                else:
+                                    failed_channels.append(f"{channel_name} (HTTP {resp.status})")
+
+                elif channel_type == 'telegram':
+                    bot_token = config_data.get('bot_token', '')
+                    chat_id = config_data.get('chat_id', '')
+                    if bot_token and chat_id:
+                        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+                        payload = {
+                            "chat_id": chat_id,
+                            "text": f"【测试通知】\n\n{template}"
+                        }
+                        timeout = aiohttp.ClientTimeout(total=10)
+                        async with aiohttp.ClientSession(timeout=timeout) as session:
+                            async with session.post(url, json=payload) as resp:
+                                if resp.status == 200:
+                                    success_channels.append(channel_name)
+                                else:
+                                    failed_channels.append(f"{channel_name} (HTTP {resp.status})")
+
+                elif channel_type == 'webhook':
+                    webhook_url = config_data.get('webhook_url', '')
+                    if webhook_url:
+                        payload = {
+                            "title": "测试通知",
+                            "content": template,
+                            "type": data.template_type
+                        }
+                        timeout = aiohttp.ClientTimeout(total=10)
+                        async with aiohttp.ClientSession(timeout=timeout) as session:
+                            async with session.post(webhook_url, json=payload) as resp:
+                                if resp.status == 200:
+                                    success_channels.append(channel_name)
+                                else:
+                                    failed_channels.append(f"{channel_name} (HTTP {resp.status})")
+
+                elif channel_type == 'email':
+                    failed_channels.append(f"{channel_name} (邮件测试暂不支持)")
+
+                else:
+                    failed_channels.append(f"{channel_name} (不支持的渠道类型)")
+
+            except Exception as e:
+                logger.error(f"渠道 {channel_name} 发送失败: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                failed_channels.append(f"{channel_name} ({str(e)})")
+
+        # 返回结果
+        if success_channels:
+            return {
+                'success': True,
+                'message': f'测试通知发送成功: {", ".join(success_channels)}',
+                'success_channels': success_channels,
+                'failed_channels': failed_channels
+            }
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f'所有渠道发送失败: {", ".join(failed_channels)}'
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get('/notification-templates/{template_type}')
+def get_notification_template(template_type: str, current_user: Dict[str, Any] = Depends(get_current_user)):
+    """获取指定类型的通知模板"""
+    from db_manager import db_manager
+    try:
+        if template_type not in ['message', 'token_refresh', 'delivery', 'slider_success', 'face_verify', 'password_login_success', 'cookie_refresh_success']:
+            raise HTTPException(status_code=400, detail='无效的模板类型')
+
+        template = db_manager.get_notification_template(template_type)
+        if template:
+            return template
+        else:
+            # 返回默认模板
+            default_template = db_manager.get_default_notification_template(template_type)
+            return {
+                'type': template_type,
+                'template': default_template,
+                'is_default': True
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class NotificationTemplateIn(BaseModel):
+    template: str
+
+
+@app.put('/notification-templates/{template_type}')
+def update_notification_template(template_type: str, data: NotificationTemplateIn, current_user: Dict[str, Any] = Depends(get_current_user)):
+    """更新通知模板"""
+    from db_manager import db_manager
+    try:
+        if template_type not in ['message', 'token_refresh', 'delivery', 'slider_success', 'face_verify', 'password_login_success', 'cookie_refresh_success']:
+            raise HTTPException(status_code=400, detail='无效的模板类型')
+
+        # 如果模板不存在，先插入默认值
+        existing = db_manager.get_notification_template(template_type)
+        if not existing:
+            cursor = db_manager.conn.cursor()
+            default_template = db_manager.get_default_notification_template(template_type)
+            cursor.execute(
+                'INSERT INTO notification_templates (type, template) VALUES (?, ?)',
+                (template_type, default_template)
+            )
+            db_manager.conn.commit()
+
+        success = db_manager.update_notification_template(template_type, data.template)
+        if success:
+            return {'msg': 'notification template updated'}
+        else:
+            raise HTTPException(status_code=400, detail='更新失败')
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post('/notification-templates/{template_type}/reset')
+def reset_notification_template(template_type: str, current_user: Dict[str, Any] = Depends(get_current_user)):
+    """重置通知模板为默认值"""
+    from db_manager import db_manager
+    try:
+        if template_type not in ['message', 'token_refresh', 'delivery', 'slider_success', 'face_verify', 'password_login_success', 'cookie_refresh_success']:
+            raise HTTPException(status_code=400, detail='无效的模板类型')
+
+        success = db_manager.reset_notification_template(template_type)
+        if success:
+            # 返回重置后的模板
+            template = db_manager.get_notification_template(template_type)
+            return {'msg': 'notification template reset', 'template': template}
+        else:
+            raise HTTPException(status_code=400, detail='重置失败')
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get('/notification-templates/{template_type}/default')
+def get_default_notification_template(template_type: str, current_user: Dict[str, Any] = Depends(get_current_user)):
+    """获取默认通知模板"""
+    from db_manager import db_manager
+    try:
+        if template_type not in ['message', 'token_refresh', 'delivery', 'slider_success', 'face_verify']:
+            raise HTTPException(status_code=400, detail='无效的模板类型')
+
+        default_template = db_manager.get_default_notification_template(template_type)
+        if default_template:
+            return {'type': template_type, 'template': default_template}
+        else:
+            raise HTTPException(status_code=404, detail='模板不存在')
     except HTTPException:
         raise
     except Exception as e:

@@ -98,6 +98,7 @@ function showSection(sectionName) {
         break;
     case 'message-notifications':  // 【消息通知菜单】
         loadMessageNotifications();
+        loadNotificationTemplates();
         break;
     case 'system-settings':    // 【系统设置菜单】
         loadSystemSettings();
@@ -4168,6 +4169,294 @@ async function updateNotificationChannel() {
     } catch (error) {
     console.error('更新通知渠道失败:', error);
     showToast('更新通知渠道失败', 'danger');
+    }
+}
+
+// ================================
+// 【通知模板配置】相关功能
+// ================================
+
+// 通知模板预览数据
+const templatePreviewData = {
+    message: {
+        account_id: 'test_account',
+        buyer_name: '张三',
+        buyer_id: '123456789',
+        item_id: '987654321',
+        chat_id: 'chat_001',
+        message: '你好，这个商品还有吗？',
+        time: new Date().toLocaleString('zh-CN')
+    },
+    token_refresh: {
+        account_id: 'test_account',
+        time: new Date().toLocaleString('zh-CN'),
+        error_message: 'Token已过期，需要重新登录',
+        verification_url: 'https://example.com/verify'
+    },
+    delivery: {
+        account_id: 'test_account',
+        buyer_name: '李四',
+        buyer_id: '234567890',
+        item_id: '876543210',
+        chat_id: 'chat_002',
+        result: '发货成功',
+        time: new Date().toLocaleString('zh-CN')
+    },
+    slider_success: {
+        account_id: 'test_account',
+        time: new Date().toLocaleString('zh-CN')
+    },
+    face_verify: {
+        account_id: 'test_account',
+        time: new Date().toLocaleString('zh-CN'),
+        verification_url: 'https://passport.goofish.com/mini_login.htm?example=test'
+    },
+    password_login_success: {
+        account_id: 'test_account',
+        time: new Date().toLocaleString('zh-CN'),
+        cookie_count: '30'
+    },
+    cookie_refresh_success: {
+        account_id: 'test_account',
+        time: new Date().toLocaleString('zh-CN'),
+        cookie_count: '30'
+    }
+};
+
+// 加载通知模板
+async function loadNotificationTemplates() {
+    try {
+        // 重置tab状态，确保只显示第一个tab
+        const tabContent = document.getElementById('notificationTemplateTabContent');
+        if (tabContent) {
+            // 重置所有tab-pane
+            tabContent.querySelectorAll('.tab-pane').forEach(pane => {
+                pane.classList.remove('show', 'active');
+            });
+            // 激活第一个tab-pane
+            const firstPane = tabContent.querySelector('#message-template');
+            if (firstPane) {
+                firstPane.classList.add('show', 'active');
+            }
+
+            // 重置所有tab按钮
+            const tabList = document.getElementById('notificationTemplateTabs');
+            if (tabList) {
+                tabList.querySelectorAll('.nav-link').forEach(link => {
+                    link.classList.remove('active');
+                    link.setAttribute('aria-selected', 'false');
+                });
+                const firstTab = tabList.querySelector('#message-template-tab');
+                if (firstTab) {
+                    firstTab.classList.add('active');
+                    firstTab.setAttribute('aria-selected', 'true');
+                }
+            }
+        }
+
+        const response = await fetch(`${apiBase}/notification-templates`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('获取通知模板失败');
+        }
+
+        const data = await response.json();
+        const templates = data.templates || [];
+
+        // 加载每个模板到编辑器
+        templates.forEach(template => {
+            const editor = document.getElementById(`${template.type}-template-editor`);
+            if (editor) {
+                editor.value = template.template;
+                updateTemplatePreview(template.type);
+            }
+        });
+
+        // 如果没有模板数据，加载默认模板
+        ['message', 'token_refresh', 'delivery', 'slider_success', 'face_verify'].forEach(async (type) => {
+            const editor = document.getElementById(`${type}-template-editor`);
+            if (editor && !editor.value) {
+                await loadDefaultTemplate(type);
+            }
+        });
+
+        showToast('通知模板加载成功', 'success');
+    } catch (error) {
+        console.error('加载通知模板失败:', error);
+        showToast('加载通知模板失败', 'danger');
+    }
+}
+
+// 加载默认模板
+async function loadDefaultTemplate(templateType) {
+    try {
+        const response = await fetch(`${apiBase}/notification-templates/${templateType}/default`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            const editor = document.getElementById(`${templateType}-template-editor`);
+            if (editor) {
+                editor.value = data.template;
+                updateTemplatePreview(templateType);
+            }
+        }
+    } catch (error) {
+        console.error(`加载默认模板失败 (${templateType}):`, error);
+    }
+}
+
+// 保存通知模板
+async function saveNotificationTemplate(templateType) {
+    try {
+        const editor = document.getElementById(`${templateType}-template-editor`);
+        if (!editor) {
+            showToast('编辑器不存在', 'danger');
+            return;
+        }
+
+        const template = editor.value;
+        if (!template.trim()) {
+            showToast('模板内容不能为空', 'warning');
+            return;
+        }
+
+        const response = await fetch(`${apiBase}/notification-templates/${templateType}`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ template })
+        });
+
+        if (!response.ok) {
+            throw new Error('保存模板失败');
+        }
+
+        showToast('模板保存成功', 'success');
+    } catch (error) {
+        console.error('保存通知模板失败:', error);
+        showToast('保存模板失败', 'danger');
+    }
+}
+
+// 重置通知模板
+async function resetNotificationTemplate(templateType) {
+    if (!confirm('确定要恢复默认模板吗？当前修改将会丢失。')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${apiBase}/notification-templates/${templateType}/reset`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('重置模板失败');
+        }
+
+        const data = await response.json();
+        const editor = document.getElementById(`${templateType}-template-editor`);
+        if (editor && data.template) {
+            editor.value = data.template.template;
+            updateTemplatePreview(templateType);
+        }
+
+        showToast('模板已恢复默认', 'success');
+    } catch (error) {
+        console.error('重置通知模板失败:', error);
+        showToast('重置模板失败', 'danger');
+    }
+}
+
+// 插入模板变量
+function insertTemplateVariable(templateType, variable) {
+    const editor = document.getElementById(`${templateType}-template-editor`);
+    if (!editor) return;
+
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    const text = editor.value;
+
+    editor.value = text.substring(0, start) + variable + text.substring(end);
+    editor.selectionStart = editor.selectionEnd = start + variable.length;
+    editor.focus();
+
+    updateTemplatePreview(templateType);
+}
+
+// 更新模板预览
+function updateTemplatePreview(templateType) {
+    const editor = document.getElementById(`${templateType}-template-editor`);
+    const preview = document.getElementById(`${templateType}-template-preview`);
+
+    if (!editor || !preview) return;
+
+    let template = editor.value;
+    const data = templatePreviewData[templateType] || {};
+
+    // 替换变量
+    for (const [key, value] of Object.entries(data)) {
+        template = template.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+    }
+
+    preview.textContent = template;
+}
+
+// 发送测试通知
+async function testNotificationTemplate(templateType) {
+    const editor = document.getElementById(`${templateType}-template-editor`);
+    if (!editor) {
+        showToast('编辑器不存在', 'danger');
+        return;
+    }
+
+    const template = editor.value;
+    if (!template.trim()) {
+        showToast('模板内容不能为空', 'warning');
+        return;
+    }
+
+    // 显示发送中提示
+    showToast('正在发送测试通知...', 'info');
+
+    try {
+        const response = await fetch(`${apiBase}/notification-templates/test`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                template_type: templateType,
+                template: template
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            showToast(data.message || '测试通知发送成功', 'success');
+            if (data.failed_channels && data.failed_channels.length > 0) {
+                console.warn('部分渠道发送失败:', data.failed_channels);
+            }
+        } else {
+            showToast(data.detail || '测试通知发送失败', 'danger');
+        }
+    } catch (error) {
+        console.error('发送测试通知失败:', error);
+        showToast('发送测试通知失败', 'danger');
     }
 }
 
@@ -13137,7 +13426,7 @@ function exportSearchResults() {
 
 
 // 默认版本号（当无法读取 version.txt 时使用）
-const DEFAULT_VERSION = 'v1.2.2';
+const DEFAULT_VERSION = 'v1.2.3';
 
 // 当前本地版本号（动态从 version.txt 读取）
 let LOCAL_VERSION = DEFAULT_VERSION;
@@ -13150,9 +13439,19 @@ let remoteVersionInfo = null;
 
 // 本地版本历史（远程服务禁用时使用）
 const LOCAL_VERSION_HISTORY = {
-    version: 'v1.2.2',
+    version: 'v1.2.3',
     intro: '本系统仅供个人学习研究使用，请勿用于商业用途。如有问题或建议，欢迎反馈。',
     versionHistory: [
+        {
+            version: 'v1.2.3',
+            date: '2026-02-08',
+            updates: [
+                '【新功能】新增通知模板自定义功能，支持7种通知类型',
+                '【新功能】暗色模式新增跟随系统选项',
+                '【修复】修复飞书通知签名验证失败的问题',
+                '【修复】修复通知内容重复显示账号ID和时间的问题'
+            ]
+        },
         {
             version: 'v1.2.2',
             date: '2026-01-29',
@@ -13613,6 +13912,16 @@ function showChangelogModal() {
 
     // 更新日志数据
     const changelog = [
+        {
+            version: 'v1.2.3',
+            date: '2026-02-08',
+            changes: [
+                { type: 'feature', text: '新增通知模板自定义功能，支持7种通知类型' },
+                { type: 'feature', text: '暗色模式新增跟随系统选项' },
+                { type: 'fix', text: '修复飞书通知签名验证失败的问题' },
+                { type: 'fix', text: '修复通知内容重复显示账号ID和时间的问题' }
+            ]
+        },
         {
             version: 'v1.2.2',
             date: '2026-01-29',

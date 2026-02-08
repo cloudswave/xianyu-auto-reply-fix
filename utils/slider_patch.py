@@ -133,19 +133,51 @@ def send_notification(user_id: str, title: str, message: str, notification_type:
                     elif channel_type == 'feishu':
                         # 飞书通知
                         webhook_url = config_data.get('webhook_url', '')
+                        secret = config_data.get('secret', '')
                         if webhook_url:
                             try:
+                                import hmac
+                                import hashlib
+                                import base64
+
+                                # 生成签名
+                                timestamp = str(int(time.time()))
+                                sign = ""
+
+                                if secret:
+                                    string_to_sign = f'{timestamp}\n{secret}'
+                                    hmac_code = hmac.new(
+                                        string_to_sign.encode('utf-8'),
+                                        ''.encode('utf-8'),
+                                        digestmod=hashlib.sha256
+                                    ).digest()
+                                    sign = base64.b64encode(hmac_code).decode('utf-8')
+
                                 payload = {
                                     "msg_type": "text",
                                     "content": {
-                                        "text": f"【闲鱼通知】{title}\n\n{message}\n\n账号ID: {user_id}\n时间: {time.strftime('%Y-%m-%d %H:%M:%S')}"
-                                    }
+                                        "text": message
+                                    },
+                                    "timestamp": timestamp
                                 }
+
+                                if sign:
+                                    payload["sign"] = sign
+
                                 async with aiohttp.ClientSession() as session:
                                     async with session.post(webhook_url, json=payload, timeout=10) as resp:
                                         if resp.status == 200:
-                                            logger.info(f"【{user_id}】飞书通知发送成功 ({channel_name})")
-                                            notification_sent = True
+                                            resp_text = await resp.text()
+                                            try:
+                                                resp_json = json.loads(resp_text)
+                                                if resp_json.get('code', 0) == 0:
+                                                    logger.info(f"【{user_id}】飞书通知发送成功 ({channel_name})")
+                                                    notification_sent = True
+                                                else:
+                                                    logger.error(f"【{user_id}】飞书通知发送失败: {resp_json.get('msg', resp_text)}")
+                                            except:
+                                                logger.info(f"【{user_id}】飞书通知发送成功 ({channel_name})")
+                                                notification_sent = True
                                         else:
                                             logger.error(f"【{user_id}】飞书通知发送失败: HTTP {resp.status}")
                             except Exception as feishu_error:
@@ -161,7 +193,7 @@ def send_notification(user_id: str, title: str, message: str, notification_type:
                                 payload = {
                                     "msgtype": "text",
                                     "text": {
-                                        "content": f"【闲鱼通知】{title}\n\n{message}\n\n账号ID: {user_id}\n时间: {time.strftime('%Y-%m-%d %H:%M:%S')}"
+                                        "content": message
                                     }
                                 }
                                 async with aiohttp.ClientSession() as session:
@@ -208,7 +240,7 @@ def send_notification(user_id: str, title: str, message: str, notification_type:
                                 telegram_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
                                 payload = {
                                     "chat_id": chat_id,
-                                    "text": f"【闲鱼通知】{title}\n\n{message}\n\n账号ID: {user_id}\n时间: {time.strftime('%Y-%m-%d %H:%M:%S')}"
+                                    "text": message
                                 }
                                 async with aiohttp.ClientSession() as session:
                                     async with session.post(telegram_url, json=payload, timeout=10) as resp:
@@ -254,7 +286,7 @@ def send_notification(user_id: str, title: str, message: str, notification_type:
                                 payload = {
                                     "msgtype": "text",
                                     "text": {
-                                        "content": f"【闲鱼通知】{title}\n\n{message}\n\n账号ID: {user_id}\n时间: {time.strftime('%Y-%m-%d %H:%M:%S')}"
+                                        "content": message
                                     }
                                 }
                                 async with aiohttp.ClientSession() as session:
