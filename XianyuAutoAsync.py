@@ -2205,17 +2205,13 @@ class XianyuLive:
                         log_id = None
                         try:
                             from db_manager import db_manager
-                            success = db_manager.add_risk_control_log(
+                            log_id = db_manager.add_risk_control_log(
                                 cookie_id=self.cookie_id,
                                 event_type='slider_captcha',
                                 event_description=f"检测到需要滑块验证，触发场景: Token刷新, URL: {verification_url}",
                                 processing_status='processing'
                             )
-                            if success:
-                                # 获取刚插入的记录ID（简单方式，实际应该返回ID）
-                                logs = db_manager.get_risk_control_logs(cookie_id=self.cookie_id, limit=1)
-                                if logs:
-                                    log_id = logs[0].get('id')
+                            if log_id:
                                 logger.info(f"【{self.cookie_id}】风控日志记录成功，ID: {log_id}")
                         except Exception as log_e:
                             logger.error(f"【{self.cookie_id}】记录风控日志失败: {log_e}")
@@ -2287,6 +2283,19 @@ class XianyuLive:
                     if isinstance(res_json, dict):
                         res_json_str = json.dumps(res_json, ensure_ascii=False, separators=(',', ':'))
                         if '令牌过期' in res_json_str or 'Session过期' in res_json_str:
+                            # 记录令牌/Session过期到风控日志
+                            try:
+                                from db_manager import db_manager
+                                expire_type = '令牌过期' if '令牌过期' in res_json_str else 'Session过期'
+                                db_manager.add_risk_control_log(
+                                    cookie_id=self.cookie_id,
+                                    event_type='token_expired',
+                                    event_description=f"检测到{expire_type}，准备刷新Cookie并重启实例",
+                                    processing_status='processing'
+                                )
+                            except Exception as log_e:
+                                logger.error(f"【{self.cookie_id}】记录风控日志失败: {log_e}")
+
                             # 调用统一的密码登录刷新方法
                             refresh_success = await self._try_password_login_refresh("令牌/Session过期")
                             
@@ -2434,18 +2443,8 @@ class XianyuLive:
                     headless=True  # 使用有头模式（可视化浏览器）
                 )
 
-                # 在线程池中执行滑块验证
-                import asyncio
-                import concurrent.futures
-
-                loop = asyncio.get_event_loop()
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    # 执行滑块验证
-                    success, cookies = await loop.run_in_executor(
-                        executor,
-                        slider_stealth.run,
-                        verification_url
-                    )
+                # 直接使用异步方法执行滑块验证（避免 ThreadPoolExecutor 导致的 Playwright 初始化问题）
+                success, cookies = await slider_stealth.async_run(verification_url)
 
                 if success and cookies:
                     logger.info(f"【{self.cookie_id}】滑块验证成功，获取到新的cookies")
@@ -2561,6 +2560,19 @@ class XianyuLive:
                 log_captcha_event(self.cookie_id, "XianyuSliderStealth导入失败", False,
                     f"Playwright未安装, 错误: {import_e}")
 
+                # 记录到风控日志
+                try:
+                    from db_manager import db_manager
+                    db_manager.add_risk_control_log(
+                        cookie_id=self.cookie_id,
+                        event_type='slider_captcha',
+                        event_description="XianyuSliderStealth导入失败，Playwright未安装",
+                        processing_status='failed',
+                        error_message=str(import_e)
+                    )
+                except Exception as log_e:
+                    logger.error(f"【{self.cookie_id}】记录风控日志失败: {log_e}")
+
                 # 发送通知
                 await self.send_token_refresh_notification(
                     f"滑块验证功能不可用，请安装Playwright。验证URL: {verification_url}",
@@ -2574,6 +2586,19 @@ class XianyuLive:
                 # 记录异常到日志文件
                 log_captcha_event(self.cookie_id, "滑块验证异常", False,
                     f"执行异常, 错误: {self._safe_str(stealth_e)[:100]}")
+
+                # 记录到风控日志
+                try:
+                    from db_manager import db_manager
+                    db_manager.add_risk_control_log(
+                        cookie_id=self.cookie_id,
+                        event_type='slider_captcha',
+                        event_description="滑块验证执行异常",
+                        processing_status='failed',
+                        error_message=self._safe_str(stealth_e)[:200]
+                    )
+                except Exception as log_e:
+                    logger.error(f"【{self.cookie_id}】记录风控日志失败: {log_e}")
 
                 # 发送通知（检查WebSocket连接状态）
                 # 只有在WebSocket未连接时才发送通知，已连接说明可能是暂时性问题
@@ -2787,6 +2812,18 @@ class XianyuLive:
         log_captcha_event(self.cookie_id, f"{trigger_reason}触发Cookie刷新和实例重启", None,
             f"检测到{trigger_reason}，准备刷新Cookie并重启实例")
 
+        # 记录到风控日志
+        try:
+            from db_manager import db_manager
+            db_manager.add_risk_control_log(
+                cookie_id=self.cookie_id,
+                event_type='cookie_refresh',
+                event_description=f"{trigger_reason}触发Cookie刷新和实例重启",
+                processing_status='processing'
+            )
+        except Exception as log_e:
+            logger.error(f"【{self.cookie_id}】记录风控日志失败: {log_e}")
+
         try:
             # 从数据库获取账号登录信息
             from db_manager import db_manager
@@ -2885,7 +2922,7 @@ class XianyuLive:
                 try:
                     await self.send_token_refresh_notification(
                         f"账号密码登录成功，Cookie已获取，准备更新并重启",
-                        "password_login_success"
+                        "cookie_refresh_success"
                     )
                 except Exception as notify_e:
                     logger.warning(f"【{self.cookie_id}】发送通知失败: {self._safe_str(notify_e)}")
@@ -4175,6 +4212,83 @@ class XianyuLive:
         except Exception:
             return 0.0
 
+    def _get_notification_template(self, template_type: str) -> str:
+        """获取通知模板，如果没有自定义模板则返回默认模板"""
+        try:
+            from db_manager import db_manager
+            template_data = db_manager.get_notification_template(template_type)
+            if template_data and template_data.get('template'):
+                return template_data['template']
+        except Exception as e:
+            logger.warning(f"获取通知模板失败: {e}")
+
+        # 返回默认模板
+        default_templates = {
+            'message': '''🚨 接收消息通知
+
+账号: {account_id}
+买家: {buyer_name} (ID: {buyer_id})
+商品ID: {item_id}
+聊天ID: {chat_id}
+消息内容: {message}
+
+时间: {time}''',
+            'token_refresh': '''Token刷新异常
+
+账号ID: {account_id}
+异常时间: {time}
+异常信息: {error_message}
+
+请检查账号Cookie是否过期，如有需要请及时更新Cookie配置。''',
+            'delivery': '''🚨 自动发货通知
+
+账号: {account_id}
+买家: {buyer_name} (ID: {buyer_id})
+商品ID: {item_id}
+聊天ID: {chat_id}
+结果: {result}
+时间: {time}
+
+请及时处理！''',
+            'slider_success': '''✅ 滑块验证成功，cookies已自动更新到数据库
+
+账号: {account_id}
+时间: {time}''',
+            'face_verify': '''⚠️ 需要{verification_type}或登录出错 🚫
+在验证期间，发货及自动回复暂时无法使用。
+
+请点击验证链接完成验证:
+{verification_url}
+
+账号: {account_id}
+时间: {time}''',
+            'password_login_success': '''✅ 密码登录成功
+
+账号: {account_id}
+时间: {time}
+Cookie数量: {cookie_count}
+
+账号Cookie已更新，正在重启服务...''',
+            'cookie_refresh_success': '''✅ 刷新Cookie成功
+
+账号: {account_id}
+时间: {time}
+Cookie数量: {cookie_count}
+
+账号已可正常使用。'''
+        }
+        return default_templates.get(template_type, '')
+
+    def _format_template(self, template: str, **kwargs) -> str:
+        """格式化模板，将变量替换为实际值"""
+        try:
+            for key, value in kwargs.items():
+                template = template.replace(f'{{{key}}}', str(value) if value is not None else '未知')
+            return template
+        except Exception as e:
+            logger.error(f"格式化模板失败: {e}")
+            return template
+
     async def send_notification(self, send_user_name: str, send_user_id: str, send_message: str, item_id: str = None, chat_id: str = None):
         """发送消息通知"""
         try:
@@ -4230,14 +4344,18 @@ class XianyuLive:
 
             logger.info(f"📱 找到 {len(notifications)} 个通知渠道配置")
 
-            # 构建通知消息
-            notification_msg = f"🚨 接收消息通知\n\n" \
-                             f"账号: {self.cookie_id}\n" \
-                             f"买家: {send_user_name} (ID: {send_user_id})\n" \
-                             f"商品ID: {item_id or '未知'}\n" \
-                             f"聊天ID: {chat_id or '未知'}\n" \
-                             f"消息内容: {send_message}\n" \
-                             f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+            # 构建通知消息（使用模板）
+            template = self._get_notification_template('message')
+            notification_msg = self._format_template(
+                template,
+                account_id=self.cookie_id,
+                buyer_name=send_user_name,
+                buyer_id=send_user_id,
+                item_id=item_id or '未知',
+                chat_id=chat_id or '未知',
+                message=send_message,
+                time=time.strftime('%Y-%m-%d %H:%M:%S')
+            )
 
             # 发送通知到各个渠道
             for i, notification in enumerate(notifications, 1):
@@ -4852,24 +4970,74 @@ class XianyuLive:
                 logger.warning("未配置消息通知，跳过Token刷新通知")
                 return
 
-            # 构造通知消息
+            # 构造通知消息（使用模板）
             # 判断异常信息中是否包含"滑块验证成功"
             if "滑块验证成功" in error_message:
-                notification_msg = f"{error_message}\n\n" \
-                                  f"账号: {self.cookie_id}\n" \
-                                  f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                # 滑块验证成功使用专用模板
+                template = self._get_notification_template('slider_success')
+                notification_msg = self._format_template(
+                    template,
+                    account_id=self.cookie_id,
+                    time=time.strftime('%Y-%m-%d %H:%M:%S')
+                )
+            elif "密码登录成功" in error_message or notification_type == "password_login_success":
+                # 密码登录成功使用专用模板
+                template = self._get_notification_template('password_login_success')
+                notification_msg = self._format_template(
+                    template,
+                    account_id=self.cookie_id,
+                    time=time.strftime('%Y-%m-%d %H:%M:%S'),
+                    cookie_count='已获取'
+                )
+            elif "刷新Cookie成功" in error_message or notification_type == "cookie_refresh_success":
+                # 自动刷新Cookie成功使用专用模板
+                template = self._get_notification_template('cookie_refresh_success')
+                notification_msg = self._format_template(
+                    template,
+                    account_id=self.cookie_id,
+                    time=time.strftime('%Y-%m-%d %H:%M:%S'),
+                    cookie_count='已获取'
+                )
+            elif "人脸验证" in error_message or "短信验证" in error_message or "二维码验证" in error_message or "身份验证" in error_message or (verification_url and "passport" in verification_url):
+                # 验证类型（人脸/短信/二维码/身份验证）使用专用模板
+                # 根据消息内容判断验证类型
+                if "人脸验证" in error_message:
+                    verify_type = "人脸验证"
+                elif "短信验证" in error_message:
+                    verify_type = "短信验证"
+                elif "二维码验证" in error_message:
+                    verify_type = "二维码验证"
+                else:
+                    verify_type = "身份验证"
+
+                template = self._get_notification_template('face_verify')
+                notification_msg = self._format_template(
+                    template,
+                    account_id=self.cookie_id,
+                    time=time.strftime('%Y-%m-%d %H:%M:%S'),
+                    verification_url=verification_url or '无',
+                    verification_type=verify_type
+                )
             elif verification_url:
-                # 如果有验证链接，添加到消息中
-                notification_msg = f"{error_message}\n\n" \
-                                  f"账号: {self.cookie_id}\n" \
-                                  f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n" \
-                                  f"验证链接: {verification_url}\n"
+                # 如果有验证链接，使用模板并添加验证链接
+                template = self._get_notification_template('token_refresh')
+                notification_msg = self._format_template(
+                    template,
+                    account_id=self.cookie_id,
+                    time=time.strftime('%Y-%m-%d %H:%M:%S'),
+                    error_message=error_message,
+                    verification_url=verification_url
+                )
             else:
-                notification_msg = f"Token刷新异常\n\n" \
-                                  f"账号ID: {self.cookie_id}\n" \
-                                  f"异常时间: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}\n" \
-                                  f"异常信息: {error_message}\n\n" \
-                                  f"请检查账号Cookie是否过期，如有需要请及时更新Cookie配置。\n"
+                # 使用模板
+                template = self._get_notification_template('token_refresh')
+                notification_msg = self._format_template(
+                    template,
+                    account_id=self.cookie_id,
+                    time=time.strftime('%Y-%m-%d %H:%M:%S'),
+                    error_message=error_message,
+                    verification_url='无'
+                )
 
             logger.info(f"准备发送Token刷新异常通知: {self.cookie_id}")
 
@@ -5020,15 +5188,18 @@ class XianyuLive:
                 logger.warning("未配置消息通知，跳过自动发货通知")
                 return
 
-            # 构造通知消息
-            notification_message = f"🚨 自动发货通知\n\n" \
-                                 f"账号: {self.cookie_id}\n" \
-                                 f"买家: {send_user_name} (ID: {send_user_id})\n" \
-                                 f"商品ID: {item_id}\n" \
-                                 f"聊天ID: {chat_id or '未知'}\n" \
-                                 f"结果: {error_message}\n" \
-                                 f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n" \
-                                 f"请及时处理！"
+            # 构造通知消息（使用模板）
+            template = self._get_notification_template('delivery')
+            notification_message = self._format_template(
+                template,
+                account_id=self.cookie_id,
+                buyer_name=send_user_name,
+                buyer_id=send_user_id,
+                item_id=item_id,
+                chat_id=chat_id or '未知',
+                result=error_message,
+                time=time.strftime('%Y-%m-%d %H:%M:%S')
+            )
 
             # 发送通知到所有已启用的通知渠道
             for notification in notifications:

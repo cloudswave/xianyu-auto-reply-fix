@@ -98,6 +98,7 @@ function showSection(sectionName) {
         break;
     case 'message-notifications':  // 【消息通知菜单】
         loadMessageNotifications();
+        loadNotificationTemplates();
         break;
     case 'system-settings':    // 【系统设置菜单】
         loadSystemSettings();
@@ -1034,9 +1035,14 @@ function renderKeywordsList(keywords) {
             `;
     } else {
             replyDisplay = `
-                <div class="keyword-group-reply">
-                    <strong>回复内容：</strong>
-                    <span class="reply-text-content">${group.reply || '<span class="text-muted">（空回复，不自动回复）</span>'}</span>
+                <div class="keyword-group-reply" id="reply-display-${groupIndex}">
+                    <div class="d-flex align-items-center">
+                        <strong>回复内容：</strong>
+                        <span class="reply-text-content">${group.reply || '<span class="text-muted">（空回复，不自动回复）</span>'}</span>
+                        <button class="reply-edit-btn" onclick="editGroupReply(${groupIndex})" title="编辑回复内容">
+                            <i class="bi bi-pencil"></i> 编辑
+                        </button>
+                    </div>
                 </div>
             `;
     }
@@ -1180,6 +1186,107 @@ function getItemName(itemId, itemTitle) {
 // 聚焦到关键词输入框
 function focusKeywordInput() {
     document.getElementById('newKeyword').focus();
+}
+
+// 编辑分组回复内容（就地编辑）
+function editGroupReply(groupIndex) {
+    const keywords = keywordsData[currentCookieId] || [];
+    const groups = groupKeywordsByReply(keywords);
+    const group = groups[groupIndex];
+
+    if (!group) {
+        showToast('找不到关键词分组', 'warning');
+        return;
+    }
+
+    const container = document.getElementById(`reply-display-${groupIndex}`);
+    if (!container) return;
+
+    // 转义HTML用于textarea
+    const replyText = group.reply || '';
+
+    container.innerHTML = `
+        <strong>回复内容：</strong>
+        <div class="reply-edit-area">
+            <textarea class="reply-edit-textarea" id="reply-edit-input-${groupIndex}" rows="3" placeholder="请输入回复内容">${replyText}</textarea>
+            <div class="reply-edit-actions">
+                <button class="reply-cancel-btn" onclick="cancelGroupReplyEdit(${groupIndex})">
+                    <i class="bi bi-x-lg"></i> 取消
+                </button>
+                <button class="reply-save-btn" onclick="saveGroupReply(${groupIndex})">
+                    <i class="bi bi-check-lg"></i> 保存
+                </button>
+            </div>
+        </div>
+    `;
+
+    // 聚焦并将光标移到末尾
+    const textarea = document.getElementById(`reply-edit-input-${groupIndex}`);
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+}
+
+// 取消编辑分组回复
+function cancelGroupReplyEdit(groupIndex) {
+    const keywords = keywordsData[currentCookieId] || [];
+    renderKeywordsList(keywords);
+}
+
+// 保存分组回复内容
+async function saveGroupReply(groupIndex) {
+    const keywords = keywordsData[currentCookieId] || [];
+    const groups = groupKeywordsByReply(keywords);
+    const group = groups[groupIndex];
+
+    if (!group) {
+        showToast('找不到关键词分组', 'warning');
+        return;
+    }
+
+    const textarea = document.getElementById(`reply-edit-input-${groupIndex}`);
+    if (!textarea) return;
+
+    const newReply = textarea.value.trim();
+
+    // 更新所有属于该分组的关键词回复内容
+    const updatedKeywords = keywords.map((item, index) => {
+        if (group.indices.includes(index)) {
+            return { ...item, reply: newReply };
+        }
+        return item;
+    });
+
+    // 提取文本类型的关键词用于保存
+    const textKeywords = updatedKeywords.filter(item => (item.type || 'text') === 'text');
+
+    try {
+        toggleLoading(true);
+
+        const response = await fetch(`${apiBase}/keywords-with-item-id/${currentCookieId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({
+                keywords: textKeywords
+            })
+        });
+
+        if (response.ok) {
+            showToast(`回复内容已更新（影响${group.indices.length}条配置）`, 'success');
+            await refreshKeywordsList();
+        } else {
+            const errorText = await response.text();
+            console.error('更新回复内容失败:', errorText);
+            showToast('更新回复内容失败', 'danger');
+        }
+    } catch (error) {
+        console.error('更新回复内容失败:', error);
+        showToast('更新回复内容失败', 'danger');
+    } finally {
+        toggleLoading(false);
+    }
 }
 
 // 编辑关键词 - 改进版本
@@ -2877,15 +2984,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // 增强的键盘快捷键和用户体验
-    document.getElementById('newKeyword')?.addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
+    // textarea 中 Enter 允许换行，Ctrl+Enter 提交
+    document.getElementById('newKeyword')?.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && e.ctrlKey) {
         e.preventDefault();
-        document.getElementById('newReply').focus();
+        addKeyword();
     }
     });
 
-    document.getElementById('newReply')?.addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
+    document.getElementById('newReply')?.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && e.ctrlKey) {
         e.preventDefault();
         addKeyword();
     }
@@ -3230,7 +3338,7 @@ async function configAIReply(accountId) {
     const customModelInput = document.getElementById('customModelName');
     const modelName = settings.model_name;
     // 检查是否是预设模型
-    const presetModels = ['qwen-plus', 'qwen-turbo', 'qwen-max', 'gpt-3.5-turbo', 'gpt-4'];
+    const presetModels = ['deepseek-v3.2', 'kimi-k2.5', 'qwen3-max-2026-01-23', 'qwen3.5-plus', 'gpt-4o-mini', 'gpt-4o'];
     if (presetModels.includes(modelName)) {
         modelSelect.value = modelName;
         customModelInput.style.display = 'none';
@@ -3246,10 +3354,18 @@ async function configAIReply(accountId) {
     document.getElementById('maxDiscountPercent').value = settings.max_discount_percent;
     document.getElementById('maxDiscountAmount').value = settings.max_discount_amount;
     document.getElementById('maxBargainRounds').value = settings.max_bargain_rounds;
-    document.getElementById('customPrompts').value = settings.custom_prompts;
+    // 解析自定义提示词 JSON，填入三个独立文本框
+    let prompts = {};
+    if (settings.custom_prompts) {
+        try { prompts = JSON.parse(settings.custom_prompts); } catch (e) { prompts = {}; }
+    }
+    document.getElementById('promptPrice').value = prompts.price || '';
+    document.getElementById('promptTech').value = prompts.tech || '';
+    document.getElementById('promptDefault').value = prompts.default || '';
 
     // 切换设置显示状态
     toggleAIReplySettings();
+    await loadAIPresets();
 
     // 显示模态框
     const modal = new bootstrap.Modal(document.getElementById('aiReplyConfigModal'));
@@ -3295,17 +3411,6 @@ async function saveAIReplyConfig() {
         showToast('请输入API密钥', 'warning');
         return;
         }
-
-        // 验证自定义提示词格式
-        const customPrompts = document.getElementById('customPrompts').value.trim();
-        if (customPrompts) {
-        try {
-            JSON.parse(customPrompts);
-        } catch (e) {
-            showToast('自定义提示词格式错误，请检查JSON格式', 'warning');
-            return;
-        }
-        }
     }
 // 获取模型名称
     let modelName = document.getElementById('aiModelName').value;
@@ -3317,6 +3422,16 @@ async function saveAIReplyConfig() {
         }
         modelName = customModelName;
     }
+    // 从三个文本框组装自定义提示词 JSON
+    const promptsObj = {};
+    const priceVal = document.getElementById('promptPrice').value.trim();
+    const techVal = document.getElementById('promptTech').value.trim();
+    const defaultVal = document.getElementById('promptDefault').value.trim();
+    if (priceVal) promptsObj.price = priceVal;
+    if (techVal) promptsObj.tech = techVal;
+    if (defaultVal) promptsObj.default = defaultVal;
+    const customPromptsJson = Object.keys(promptsObj).length > 0 ? JSON.stringify(promptsObj) : '';
+
     // 构建设置对象
     const settings = {
         ai_enabled: enabled,
@@ -3326,7 +3441,7 @@ async function saveAIReplyConfig() {
         max_discount_percent: parseInt(document.getElementById('maxDiscountPercent').value),
         max_discount_amount: parseInt(document.getElementById('maxDiscountAmount').value),
         max_bargain_rounds: parseInt(document.getElementById('maxBargainRounds').value),
-        custom_prompts: document.getElementById('customPrompts').value
+        custom_prompts: customPromptsJson
     };
 
     // 保存设置
@@ -3356,6 +3471,10 @@ async function saveAIReplyConfig() {
 
 // 测试AI回复
 async function testAIReply() {
+    const testBtn = document.querySelector('[onclick="testAIReply()"]');
+    if (testBtn && testBtn.disabled) return;
+    if (testBtn) { testBtn.disabled = true; testBtn.textContent = '测试中...'; }
+
     try {
     const accountId = document.getElementById('aiConfigAccountId').value;
     const testMessage = document.getElementById('testMessage').value.trim();
@@ -3405,6 +3524,8 @@ async function testAIReply() {
     const testReplyContent = document.getElementById('testReplyContent');
     testReplyContent.innerHTML = `<span class="text-danger">测试失败: ${error.message}</span>`;
     showToast('测试AI回复失败', 'danger');
+    } finally {
+    if (testBtn) { testBtn.disabled = false; testBtn.textContent = '测试回复'; }
     }
 }
 
@@ -3418,6 +3539,141 @@ function toggleCustomModelInput() {
     } else {
     customModelInput.style.display = 'none';
     customModelInput.value = '';
+    }
+}
+
+// -------------------- AI配置预设功能 --------------------
+
+let _aiPresets = []; // 缓存预设数据，避免依赖 option dataset
+
+async function loadAIPresets() {
+    try {
+        const presets = await fetchJSON(`${apiBase}/ai-config-presets`);
+        _aiPresets = presets || [];
+        const select = document.getElementById('aiPresetSelect');
+        const deleteBtn = document.getElementById('deletePresetBtn');
+        select.innerHTML = '<option value="">-- 选择预设 --</option>';
+        _aiPresets.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = p.preset_name;
+            select.appendChild(opt);
+        });
+        // 尝试自动匹配当前表单值对应的预设
+        _autoSelectMatchingPreset();
+        deleteBtn.style.display = select.value ? '' : 'none';
+    } catch (e) {
+        console.error('加载AI配置预设失败:', e);
+    }
+}
+
+function _autoSelectMatchingPreset() {
+    const select = document.getElementById('aiPresetSelect');
+    const modelSelect = document.getElementById('aiModelName');
+    const customModelInput = document.getElementById('customModelName');
+    const curModel = modelSelect.value === 'custom' ? customModelInput.value : modelSelect.value;
+    const curKey = document.getElementById('aiApiKey').value;
+    const curUrl = document.getElementById('aiBaseUrl').value;
+
+    const match = _aiPresets.find(p =>
+        p.model_name === curModel && p.api_key === curKey && p.base_url === curUrl
+    );
+    select.value = match ? match.id : '';
+}
+
+function loadAIPreset() {
+    const select = document.getElementById('aiPresetSelect');
+    const deleteBtn = document.getElementById('deletePresetBtn');
+    const presetId = select.value;
+
+    if (!presetId) {
+        deleteBtn.style.display = 'none';
+        return;
+    }
+    deleteBtn.style.display = '';
+
+    const preset = _aiPresets.find(p => String(p.id) === presetId);
+    if (!preset) return;
+
+    // 填充模型
+    const modelSelect = document.getElementById('aiModelName');
+    const customModelInput = document.getElementById('customModelName');
+    const builtinModels = Array.from(modelSelect.options).map(o => o.value).filter(v => v && v !== 'custom');
+    if (builtinModels.includes(preset.model_name)) {
+        modelSelect.value = preset.model_name;
+        customModelInput.style.display = 'none';
+        customModelInput.value = '';
+    } else {
+        modelSelect.value = 'custom';
+        customModelInput.style.display = 'block';
+        customModelInput.value = preset.model_name;
+    }
+
+    document.getElementById('aiBaseUrl').value = preset.base_url;
+    document.getElementById('aiApiKey').value = preset.api_key;
+
+    showToast(`已切换到预设「${preset.preset_name}」`, 'success');
+}
+
+async function saveCurrentAsPreset() {
+    const name = prompt('请输入预设名称：');
+    if (!name || !name.trim()) return;
+
+    const modelSelect = document.getElementById('aiModelName');
+    const customModelInput = document.getElementById('customModelName');
+    const modelName = modelSelect.value === 'custom' ? customModelInput.value : modelSelect.value;
+    const apiKey = document.getElementById('aiApiKey').value;
+    const baseUrl = document.getElementById('aiBaseUrl').value;
+
+    if (!modelName) {
+        showToast('请先选择或输入模型名称', 'warning');
+        return;
+    }
+
+    try {
+        await fetchJSON(`${apiBase}/ai-config-presets`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                preset_name: name.trim(),
+                model_name: modelName,
+                api_key: apiKey,
+                base_url: baseUrl
+            })
+        });
+        showToast('预设保存成功', 'success');
+        await loadAIPresets();
+        // 自动选中刚保存的预设
+        const select = document.getElementById('aiPresetSelect');
+        const saved = _aiPresets.find(p => p.preset_name === name.trim());
+        if (saved) {
+            select.value = saved.id;
+            document.getElementById('deletePresetBtn').style.display = '';
+        }
+    } catch (e) {
+        console.error('保存预设失败:', e);
+        showToast('保存预设失败', 'danger');
+    }
+}
+
+async function deleteSelectedPreset() {
+    const select = document.getElementById('aiPresetSelect');
+    const presetId = select.value;
+    if (!presetId) return;
+
+    const preset = _aiPresets.find(p => String(p.id) === presetId);
+    if (!preset) return;
+    if (!confirm(`确定删除预设「${preset.preset_name}」吗？`)) return;
+
+    try {
+        await fetchJSON(`${apiBase}/ai-config-presets/${presetId}`, {
+            method: 'DELETE'
+        });
+        showToast('预设已删除', 'success');
+        await loadAIPresets();
+    } catch (e) {
+        console.error('删除预设失败:', e);
+        showToast('删除预设失败', 'danger');
     }
 }
 
@@ -4168,6 +4424,295 @@ async function updateNotificationChannel() {
     } catch (error) {
     console.error('更新通知渠道失败:', error);
     showToast('更新通知渠道失败', 'danger');
+    }
+}
+
+// ================================
+// 【通知模板配置】相关功能
+// ================================
+
+// 通知模板预览数据
+const templatePreviewData = {
+    message: {
+        account_id: 'test_account',
+        buyer_name: '张三',
+        buyer_id: '123456789',
+        item_id: '987654321',
+        chat_id: 'chat_001',
+        message: '你好，这个商品还有吗？',
+        time: new Date().toLocaleString('zh-CN')
+    },
+    token_refresh: {
+        account_id: 'test_account',
+        time: new Date().toLocaleString('zh-CN'),
+        error_message: 'Token已过期，需要重新登录',
+        verification_url: 'https://example.com/verify'
+    },
+    delivery: {
+        account_id: 'test_account',
+        buyer_name: '李四',
+        buyer_id: '234567890',
+        item_id: '876543210',
+        chat_id: 'chat_002',
+        result: '发货成功',
+        time: new Date().toLocaleString('zh-CN')
+    },
+    slider_success: {
+        account_id: 'test_account',
+        time: new Date().toLocaleString('zh-CN')
+    },
+    face_verify: {
+        account_id: 'test_account',
+        time: new Date().toLocaleString('zh-CN'),
+        verification_url: 'https://passport.goofish.com/mini_login.htm?example=test',
+        verification_type: '人脸验证'
+    },
+    password_login_success: {
+        account_id: 'test_account',
+        time: new Date().toLocaleString('zh-CN'),
+        cookie_count: '30'
+    },
+    cookie_refresh_success: {
+        account_id: 'test_account',
+        time: new Date().toLocaleString('zh-CN'),
+        cookie_count: '30'
+    }
+};
+
+// 加载通知模板
+async function loadNotificationTemplates() {
+    try {
+        // 重置tab状态，确保只显示第一个tab
+        const tabContent = document.getElementById('notificationTemplateTabContent');
+        if (tabContent) {
+            // 重置所有tab-pane
+            tabContent.querySelectorAll('.tab-pane').forEach(pane => {
+                pane.classList.remove('show', 'active');
+            });
+            // 激活第一个tab-pane
+            const firstPane = tabContent.querySelector('#message-template');
+            if (firstPane) {
+                firstPane.classList.add('show', 'active');
+            }
+
+            // 重置所有tab按钮
+            const tabList = document.getElementById('notificationTemplateTabs');
+            if (tabList) {
+                tabList.querySelectorAll('.nav-link').forEach(link => {
+                    link.classList.remove('active');
+                    link.setAttribute('aria-selected', 'false');
+                });
+                const firstTab = tabList.querySelector('#message-template-tab');
+                if (firstTab) {
+                    firstTab.classList.add('active');
+                    firstTab.setAttribute('aria-selected', 'true');
+                }
+            }
+        }
+
+        const response = await fetch(`${apiBase}/notification-templates`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('获取通知模板失败');
+        }
+
+        const data = await response.json();
+        const templates = data.templates || [];
+
+        // 加载每个模板到编辑器
+        templates.forEach(template => {
+            const editor = document.getElementById(`${template.type}-template-editor`);
+            if (editor) {
+                editor.value = template.template;
+                updateTemplatePreview(template.type);
+            }
+        });
+
+        // 如果没有模板数据，加载默认模板
+        ['message', 'token_refresh', 'delivery', 'slider_success', 'face_verify'].forEach(async (type) => {
+            const editor = document.getElementById(`${type}-template-editor`);
+            if (editor && !editor.value) {
+                await loadDefaultTemplate(type);
+            }
+        });
+
+        showToast('通知模板加载成功', 'success');
+    } catch (error) {
+        console.error('加载通知模板失败:', error);
+        showToast('加载通知模板失败', 'danger');
+    }
+}
+
+// 加载默认模板
+async function loadDefaultTemplate(templateType) {
+    try {
+        const response = await fetch(`${apiBase}/notification-templates/${templateType}/default`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            const editor = document.getElementById(`${templateType}-template-editor`);
+            if (editor) {
+                editor.value = data.template;
+                updateTemplatePreview(templateType);
+            }
+        }
+    } catch (error) {
+        console.error(`加载默认模板失败 (${templateType}):`, error);
+    }
+}
+
+// 保存通知模板
+async function saveNotificationTemplate(templateType) {
+    try {
+        const editor = document.getElementById(`${templateType}-template-editor`);
+        if (!editor) {
+            showToast('编辑器不存在', 'danger');
+            return;
+        }
+
+        const template = editor.value;
+        if (!template.trim()) {
+            showToast('模板内容不能为空', 'warning');
+            return;
+        }
+
+        const response = await fetch(`${apiBase}/notification-templates/${templateType}`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ template })
+        });
+
+        if (!response.ok) {
+            throw new Error('保存模板失败');
+        }
+
+        showToast('模板保存成功', 'success');
+    } catch (error) {
+        console.error('保存通知模板失败:', error);
+        showToast('保存模板失败', 'danger');
+    }
+}
+
+// 重置通知模板
+async function resetNotificationTemplate(templateType) {
+    if (!confirm('确定要恢复默认模板吗？当前修改将会丢失。')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${apiBase}/notification-templates/${templateType}/reset`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('重置模板失败');
+        }
+
+        const data = await response.json();
+        const editor = document.getElementById(`${templateType}-template-editor`);
+        if (editor && data.template) {
+            editor.value = data.template.template;
+            updateTemplatePreview(templateType);
+        }
+
+        showToast('模板已恢复默认', 'success');
+    } catch (error) {
+        console.error('重置通知模板失败:', error);
+        showToast('重置模板失败', 'danger');
+    }
+}
+
+// 插入模板变量
+function insertTemplateVariable(templateType, variable) {
+    const editor = document.getElementById(`${templateType}-template-editor`);
+    if (!editor) return;
+
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    const text = editor.value;
+
+    editor.value = text.substring(0, start) + variable + text.substring(end);
+    editor.selectionStart = editor.selectionEnd = start + variable.length;
+    editor.focus();
+
+    updateTemplatePreview(templateType);
+}
+
+// 更新模板预览
+function updateTemplatePreview(templateType) {
+    const editor = document.getElementById(`${templateType}-template-editor`);
+    const preview = document.getElementById(`${templateType}-template-preview`);
+
+    if (!editor || !preview) return;
+
+    let template = editor.value;
+    const data = templatePreviewData[templateType] || {};
+
+    // 替换变量
+    for (const [key, value] of Object.entries(data)) {
+        template = template.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+    }
+
+    preview.textContent = template;
+}
+
+// 发送测试通知
+async function testNotificationTemplate(templateType) {
+    const editor = document.getElementById(`${templateType}-template-editor`);
+    if (!editor) {
+        showToast('编辑器不存在', 'danger');
+        return;
+    }
+
+    const template = editor.value;
+    if (!template.trim()) {
+        showToast('模板内容不能为空', 'warning');
+        return;
+    }
+
+    // 显示发送中提示
+    showToast('正在发送测试通知...', 'info');
+
+    try {
+        const response = await fetch(`${apiBase}/notification-templates/test`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                template_type: templateType,
+                template: template
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            showToast(data.message || '测试通知发送成功', 'success');
+            if (data.failed_channels && data.failed_channels.length > 0) {
+                console.warn('部分渠道发送失败:', data.failed_channels);
+            }
+        } else {
+            showToast(data.detail || '测试通知发送失败', 'danger');
+        }
+    } catch (error) {
+        console.error('发送测试通知失败:', error);
+        showToast('发送测试通知失败', 'danger');
     }
 }
 
@@ -12480,10 +13025,22 @@ function displayRiskControlLogs(logs) {
                 statusBadge = '<span class="badge bg-secondary">未知</span>';
         }
 
+        // 事件类型映射
+        const eventTypeMap = {
+            'slider_captcha': '滑块验证',
+            'face_verify': '人脸验证',
+            'sms_verify': '短信验证',
+            'qr_verify': '二维码验证',
+            'password_error': '账密错误',
+            'token_expired': '令牌过期',
+            'cookie_refresh': 'Cookie刷新'
+        };
+        const eventTypeName = eventTypeMap[log.event_type] || log.event_type || '-';
+
         row.innerHTML = `
             <td class="text-nowrap">${createdAt}</td>
             <td class="text-nowrap">${escapeHtml(log.cookie_id || '-')}</td>
-            <td class="text-nowrap">${escapeHtml(log.event_type || '-')}</td>
+            <td class="text-nowrap">${escapeHtml(eventTypeName)}</td>
             <td>${statusBadge}</td>
             <td class="text-truncate" style="max-width: 200px;" title="${escapeHtml(log.event_description || '-')}">${escapeHtml(log.event_description || '-')}</td>
             <td class="text-truncate" style="max-width: 200px;" title="${escapeHtml(log.processing_result || '-')}">${escapeHtml(log.processing_result || '-')}</td>
@@ -13137,7 +13694,7 @@ function exportSearchResults() {
 
 
 // 默认版本号（当无法读取 version.txt 时使用）
-const DEFAULT_VERSION = 'v1.2.2';
+const DEFAULT_VERSION = 'v1.2.6';
 
 // 当前本地版本号（动态从 version.txt 读取）
 let LOCAL_VERSION = DEFAULT_VERSION;
@@ -13150,9 +13707,50 @@ let remoteVersionInfo = null;
 
 // 本地版本历史（远程服务禁用时使用）
 const LOCAL_VERSION_HISTORY = {
-    version: 'v1.2.2',
+    version: 'v1.2.6',
     intro: '本系统仅供个人学习研究使用，请勿用于商业用途。如有问题或建议，欢迎反馈。',
     versionHistory: [
+        {
+            version: 'v1.2.6',
+            date: '2026-02-18',
+            updates: [
+                '【优化】AI回复配置：修复模型下拉框HTML标签错误，更新可用模型列表（新增deepseek-v3.2、kimi-k2.5等）',
+                '【优化】自定义提示词：从单JSON输入改为议价/技术/一般三个独立输入框，操作更直观',
+                '【优化】关键词输入：输入框改为多行文本域，支持竖线和换行分隔批量添加',
+                '【新功能】关键词回复内容支持就地编辑，无需重新添加即可修改回复文本',
+                '【优化】暗色模式全面适配：关键词管理、账号管理、扫码登录弹窗、全局滚动条',
+                '【修复】关键词输入区域布局错乱问题'
+            ]
+        },
+        {
+            version: 'v1.2.5',
+            date: '2026-02-12',
+            updates: [
+                '【新功能】风控日志新增令牌过期、Cookie刷新等事件类型，支持7种状态显示',
+                '【优化】滑块验证异常和导入失败事件同步写入风控日志数据库'
+            ]
+        },
+        {
+            version: 'v1.2.4',
+            date: '2026-02-08',
+            updates: [
+                '【新功能】优化验证类型检测，精确区分人脸/短信/二维码/账密错误',
+                '【新功能】新增 {verification_type} 模板变量',
+                '【新功能】风控日志支持多种事件类型',
+                '【修复】修复密码登录时 db_manager 变量作用域问题',
+                '【修复】移除通知中的【闲鱼通知】前缀'
+            ]
+        },
+        {
+            version: 'v1.2.3',
+            date: '2026-02-08',
+            updates: [
+                '【新功能】新增通知模板自定义功能，支持7种通知类型',
+                '【新功能】暗色模式新增跟随系统选项',
+                '【修复】修复飞书通知签名验证失败的问题',
+                '【修复】修复通知内容重复显示账号ID和时间的问题'
+            ]
+        },
         {
             version: 'v1.2.2',
             date: '2026-01-29',
@@ -13611,130 +14209,32 @@ function showChangelogModal() {
     const changelogContent = document.getElementById('changelogContent');
     if (!changelogContent) return;
 
-    // 更新日志数据
-    const changelog = [
-        {
-            version: 'v1.2.2',
-            date: '2026-01-29',
-            changes: [
-                { type: 'fix', text: '修复下单时买家昵称提取错误的问题' },
-                { type: 'fix', text: '修复点击导航链接会刷新页面的问题' },
-                { type: 'fix', text: '修复暗色模式刷新页面闪烁问题' },
-                { type: 'fix', text: '修复递归搜索误提取tradeId等非商品ID的问题' },
-                { type: 'fix', text: '修复订单管理商品ID提取错误的问题' }
-            ]
-        },
-        {
-            version: 'v1.2.1',
-            date: '2026-01-28',
-            changes: [
-                { type: 'feature', text: '新增暗色模式支持，可在系统设置中切换主题' },
-                { type: 'feature', text: '下单时自动获取并保存买家昵称' }
-            ]
-        },
-        {
-            version: 'v1.2.0',
-            date: '2026-01-28',
-            changes: [
-                { type: 'optimize', text: '大幅优化滑块验证重试策略' },
-                { type: 'optimize', text: '缩短滑块验证重试等待时间' }
-            ]
-        },
-        {
-            version: 'v1.1.9',
-            date: '2026-01-28',
-            changes: [
-                { type: 'fix', text: '修复交易关闭时订单状态不更新的问题' }
-            ]
-        },
-        {
-            version: 'v1.1.8',
-            date: '2026-01-28',
-            changes: [
-                { type: 'optimize', text: '优化滑块验证策略' },
-                { type: 'feature', text: '添加滑块验证优化代码' }
-            ]
-        },
-        {
-            version: 'v1.1.7',
-            date: '2026-01-28',
-            changes: [
-                { type: 'feature', text: '菜单管理: 新增拖拽排序功能' },
-                { type: 'feature', text: '按住拖动图标可调整菜单顺序' },
-                { type: 'feature', text: '菜单顺序自动保存到用户配置' },
-                { type: 'feature', text: '版本信息: 点击版本号可查看更新日志' },
-                { type: 'optimize', text: '侧边栏: 使用CSS order属性实现菜单重排序' },
-                { type: 'fix', text: '修复菜单排序后管理员功能和登出按钮位置错乱的问题' }
-            ]
-        },
-        {
-            version: 'v1.1.6',
-            date: '2026-01-27',
-            changes: [
-                { type: 'feature', text: '菜单管理: 新增侧边栏菜单显示/隐藏功能' },
-                { type: 'feature', text: '在系统设置中可自定义显示哪些菜单项' }
-            ]
-        },
-        {
-            version: 'v1.1.5',
-            date: '2026-01-27',
-            changes: [
-                { type: 'feature', text: '主题设置: 新增主题颜色自定义功能' },
-                { type: 'feature', text: '提供9种预设颜色，支持自定义任意颜色' },
-                { type: 'optimize', text: '系统设置界面简化，操作更直观' }
-            ]
-        },
-        {
-            version: 'v1.1.4',
-            date: '2026-01-27',
-            changes: [
-                { type: 'feature', text: '订单管理: 新增买家昵称列' },
-                { type: 'feature', text: '订单搜索支持按买家昵称搜索' },
-                { type: 'optimize', text: '数据库: 自动迁移添加 buyer_nick 字段' }
-            ]
-        },
-        {
-            version: 'v1.1.3',
-            date: '2026-01-27',
-            changes: [
-                { type: 'optimize', text: '系统设置: 优化"登录与注册设置"卡片布局' }
-            ]
-        },
-        {
-            version: 'v1.1.2',
-            date: '2026-01-27',
-            changes: [
-                { type: 'optimize', text: '在线客服: 修复页面底部白色空白区域问题' },
-                { type: 'optimize', text: '系统设置: 重新组织页面布局' }
-            ]
-        },
-        {
-            version: 'v1.1.1',
-            date: '2026-01-27',
-            changes: [
-                { type: 'feature', text: '在线客服: 优化账号密码显示布局' },
-                { type: 'feature', text: 'API: cookies/details 接口新增返回 password 字段' },
-                { type: 'optimize', text: 'UI: 添加 favicon 图标' }
-            ]
-        },
-        {
-            version: 'v1.1.0',
-            date: '2026-01-25',
-            changes: [
-                { type: 'feature', text: '添加登录页面验证码开关功能' },
-                { type: 'feature', text: '优化订单管理功能' },
-                { type: 'feature', text: '添加手动发货和刷新订单状态功能' },
-                { type: 'fix', text: '修复自动发货模块语法错误导致账号无法启动的问题' }
-            ]
-        },
-        {
-            version: 'v1.0.0',
-            date: '2026-01-24',
-            changes: [
-                { type: 'feature', text: '闲鱼自动回复系统初始版本' }
-            ]
-        }
-    ];
+    // 从 LOCAL_VERSION_HISTORY 统一读取，避免维护两份数据
+    const prefixTypeMap = {
+        '新功能': 'feature',
+        '优化': 'optimize',
+        '修复': 'fix'
+    };
+    const changelog = LOCAL_VERSION_HISTORY.versionHistory.map(v => ({
+        version: v.version,
+        date: v.date,
+        changes: v.updates.map(text => {
+            let type = 'feature';
+            let cleanText = text;
+            const match = text.match(/^【(.+?)】(.+)$/);
+            if (match) {
+                if (prefixTypeMap[match[1]]) {
+                    type = prefixTypeMap[match[1]];
+                    cleanText = match[2];
+                } else {
+                    // 模块名前缀（如【菜单管理】），保留完整文本
+                    type = 'feature';
+                    cleanText = text;
+                }
+            }
+            return { type, text: cleanText };
+        })
+    }));
 
     // 生成HTML
     const html = changelog.map(release => {

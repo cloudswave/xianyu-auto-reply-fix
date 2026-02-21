@@ -192,6 +192,85 @@ input:checked + .status-slider:before {
   }
 }
 
+/* ================================
+   暗色模式适配 - 账号管理
+   ================================ */
+
+/* 禁用账号行 */
+[data-theme="dark"] .account-row.disabled {
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .account-row.disabled .cookie-value {
+  background-color: var(--input-bg);
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .cookie-value {
+  color: var(--text-color);
+}
+
+/* 状态徽章 */
+[data-theme="dark"] .status-badge.enabled {
+  background: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+[data-theme="dark"] .status-badge.disabled {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+/* 禁用账号提示 */
+[data-theme="dark"] .disabled-account-notice {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #fcd34d;
+}
+
+/* 扫码登录模态框 */
+[data-theme="dark"] .qr-loading-tip,
+[data-theme="dark"] .bg-light-warning {
+  background-color: rgba(245, 158, 11, 0.15) !important;
+  color: #fcd34d;
+}
+
+[data-theme="dark"] .qr-loading-tip .text-warning,
+[data-theme="dark"] .qr-loading-tip small {
+  color: #fcd34d !important;
+}
+
+[data-theme="dark"] #qrCodeLoginModal .step-item small {
+  color: var(--text-color);
+}
+
+[data-theme="dark"] #qrCodeLoginModal .text-muted {
+  color: var(--text-secondary) !important;
+}
+
+[data-theme="dark"] #qrCodeLoginModal .alert.bg-light {
+  background-color: var(--bg-secondary) !important;
+  color: var(--text-color);
+}
+
+[data-theme="dark"] #qrCodeLoginModal .alert.bg-light small {
+  color: var(--text-color);
+}
+
+[data-theme="dark"] #qrCodeLoginModal .modal-footer.bg-light {
+  background-color: var(--bg-secondary) !important;
+}
+
+[data-theme="dark"] #qrCodeLoginModal .qr-code-wrapper.bg-light {
+  background-color: var(--bg-secondary) !important;
+}
+
+[data-theme="dark"] #qrCodeLoginModal #statusText {
+  color: var(--text-secondary);
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
   .status-toggle {

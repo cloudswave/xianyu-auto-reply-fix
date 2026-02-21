@@ -192,10 +192,12 @@
               <i class="bi bi-info-circle me-1"></i>
               版本: <span id="versionNumber">加载中...</span>
             </span>
+            <!-- 最新权益功能暂时隐藏
             <span class="badge bg-gradient" id="benefitsBadge" style="cursor: pointer; background: linear-gradient(135deg, #ff6b6b, #feca57, #48dbfb) !important; color: #fff; animation: benefitsGlow 2s ease-in-out infinite;" onclick="showBenefitsModal()">
               <i class="bi bi-gift me-1"></i>
               最新权益
             </span>
+            -->
           </div>
         </div>
       </div>
@@ -938,41 +940,41 @@
           <!-- 添加关键词区域 -->
           <div class="keyword-input-area">
             <div class="keyword-input-group">
-              <div class="input-field">
-                <label>关键词（支持多个，用|分割）</label>
-                <input type="text" id="newKeyword" placeholder="例如：你好|您好|在吗（多个关键词用 | 分隔）">
+              <!-- 第一行：关键词 + 商品选择 -->
+              <div class="keyword-input-row">
+                <div class="input-field keyword-field">
+                  <label>关键词</label>
+                  <textarea id="newKeyword" rows="3" placeholder="每行一个关键词，或用 | 分隔&#10;例如：&#10;你好&#10;您好&#10;在吗"></textarea>
+                </div>
+                <div class="input-field item-field">
+                  <label>商品（可选，支持多选）</label>
+                  <select id="newItemIdSelect" class="form-select" multiple size="4">
+                    <option value="">通用关键词（不选择任何商品）</option>
+                  </select>
+                  <small class="text-muted mt-1">按住Ctrl或Shift可多选商品</small>
+                </div>
               </div>
-              <div class="input-field">
-                <label>自动回复内容（可选）</label>
-                <input type="text" id="newReply" placeholder="例如：您好，欢迎咨询！留空表示不回复">
+              <!-- 第二行：回复内容 -->
+              <div class="input-field reply-field">
+                <label>自动回复内容（可选，留空表示不回复）</label>
+                <textarea id="newReply" rows="2" placeholder="例如：您好，欢迎咨询！支持变量：{send_user_name} 用户昵称、{send_user_id} 用户ID、{send_message} 用户消息"></textarea>
               </div>
-              <div class="input-field">
-                <label>商品ID（可选，支持多选）</label>
-                <select id="newItemIdSelect" class="form-select" multiple size="4">
-                  <option value="">通用关键词（不选择任何商品）</option>
-                </select>
-                <small class="text-muted mt-1">按住Ctrl或Shift可多选商品</small>
+              <!-- 第三行：按钮 -->
+              <div class="keyword-btn-row">
+                <button class="add-btn" onclick="addKeyword()">
+                  <i class="bi bi-plus-lg"></i>
+                  添加文本关键词
+                </button>
+                <button class="add-btn btn-image" onclick="showAddImageKeywordModal()">
+                  <i class="bi bi-image"></i>
+                  添加图片关键词
+                </button>
               </div>
-              <button class="add-btn" onclick="addKeyword()">
-                <i class="bi bi-plus-lg"></i>
-                添加文本关键词
-              </button>
-              <button class="add-btn btn-image" onclick="showAddImageKeywordModal()">
-                <i class="bi bi-image"></i>
-                添加图片关键词
-              </button>
             </div>
             <div class="mt-3">
               <small class="text-muted">
-                <i class="bi bi-lightbulb me-1"></i>
-                <strong>支持变量：</strong>
-                <code>{send_user_name}</code> 用户昵称，
-                <code>{send_user_id}</code> 用户ID，
-                <code>{send_message}</code> 用户消息<br>
                 <i class="bi bi-info-circle me-1"></i>
-                <strong>提示：</strong>回复内容留空时，匹配到关键词但不会自动回复，可用于屏蔽特定消息<br>
-                <i class="bi bi-stars me-1"></i>
-                <strong>新功能：</strong>支持输入多个关键词（用 | 或换行分隔）和选择多个商品ID，自动展开保存
+                <strong>提示：</strong>回复内容留空时，匹配到关键词但不会自动回复，可用于屏蔽特定消息
               </small>
             </div>
           </div>
@@ -1359,6 +1361,343 @@
         <p class="text-muted mb-0">为每个账号配置消息通知渠道</p>
       </div>
       <div class="content-body">
+        <!-- 通知样式配置 -->
+        <div class="card mb-4">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-palette me-2"></i>通知样式配置</span>
+            <button class="btn btn-sm btn-outline-primary" onclick="loadNotificationTemplates()">
+              <i class="bi bi-arrow-clockwise me-1"></i>刷新
+            </button>
+          </div>
+          <div class="card-body">
+            <p class="text-muted mb-3">自定义不同类型通知的消息样式，支持变量替换和实时预览</p>
+
+            <!-- 通知类型标签页 -->
+            <ul class="nav nav-tabs" id="notificationTemplateTabs" role="tablist">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="message-template-tab" data-bs-toggle="tab"
+                        data-bs-target="#message-template" type="button" role="tab"
+                        aria-controls="message-template" aria-selected="true">
+                  <i class="bi bi-chat-left-text me-1"></i>消息通知
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="token-template-tab" data-bs-toggle="tab"
+                        data-bs-target="#token-template" type="button" role="tab"
+                        aria-controls="token-template" aria-selected="false">
+                  <i class="bi bi-key me-1"></i>Token刷新
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="delivery-template-tab" data-bs-toggle="tab"
+                        data-bs-target="#delivery-template" type="button" role="tab"
+                        aria-controls="delivery-template" aria-selected="false">
+                  <i class="bi bi-box-seam me-1"></i>自动发货
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="slider_success-template-tab" data-bs-toggle="tab"
+                        data-bs-target="#slider_success-template" type="button" role="tab"
+                        aria-controls="slider_success-template" aria-selected="false">
+                  <i class="bi bi-check-circle me-1"></i>滑块成功
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="face_verify-template-tab" data-bs-toggle="tab"
+                        data-bs-target="#face_verify-template" type="button" role="tab"
+                        aria-controls="face_verify-template" aria-selected="false">
+                  <i class="bi bi-person-bounding-box me-1"></i>人脸验证
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="password_login_success-template-tab" data-bs-toggle="tab"
+                        data-bs-target="#password_login_success-template" type="button" role="tab"
+                        aria-controls="password_login_success-template" aria-selected="false">
+                  <i class="bi bi-key me-1"></i>密码登录成功
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="cookie_refresh_success-template-tab" data-bs-toggle="tab"
+                        data-bs-target="#cookie_refresh_success-template" type="button" role="tab"
+                        aria-controls="cookie_refresh_success-template" aria-selected="false">
+                  <i class="bi bi-arrow-repeat me-1"></i>刷新Cookie成功
+                </button>
+              </li>
+            </ul>
+
+            <div class="tab-content border border-top-0 rounded-bottom p-3" id="notificationTemplateTabContent">
+              <!-- 消息通知模板 -->
+              <div class="tab-pane fade show active" id="message-template" role="tabpanel" aria-labelledby="message-template-tab">
+                <div class="row">
+                  <div class="col-md-6">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                      <label class="form-label mb-0"><strong>模板编辑器</strong></label>
+                      <div>
+                        <button class="btn btn-sm btn-outline-info me-1" onclick="testNotificationTemplate('message')">
+                          <i class="bi bi-send me-1"></i>测试
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary me-1" onclick="resetNotificationTemplate('message')">
+                          <i class="bi bi-arrow-counterclockwise me-1"></i>恢复默认
+                        </button>
+                        <button class="btn btn-sm btn-primary" onclick="saveNotificationTemplate('message')">
+                          <i class="bi bi-check-lg me-1"></i>保存
+                        </button>
+                      </div>
+                    </div>
+                    <div class="mb-2">
+                      <small class="text-muted">可用变量（点击插入）：</small>
+                      <div class="d-flex flex-wrap gap-1 mt-1">
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('message', '{account_id}')">{account_id}</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('message', '{buyer_name}')">{buyer_name}</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('message', '{buyer_id}')">{buyer_id}</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('message', '{item_id}')">{item_id}</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('message', '{chat_id}')">{chat_id}</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('message', '{message}')">{message}</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('message', '{time}')">{time}</button>
+                      </div>
+                    </div>
+                    <textarea class="form-control font-monospace" id="message-template-editor" rows="12"
+                              oninput="updateTemplatePreview('message')"></textarea>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label"><strong>实时预览</strong></label>
+                    <div class="border rounded p-3 bg-light" style="min-height: 280px; white-space: pre-wrap; font-family: monospace;"
+                         id="message-template-preview"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Token刷新通知模板 -->
+              <div class="tab-pane fade" id="token-template" role="tabpanel" aria-labelledby="token-template-tab">
+                <div class="row">
+                  <div class="col-md-6">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                      <label class="form-label mb-0"><strong>模板编辑器</strong></label>
+                      <div>
+                        <button class="btn btn-sm btn-outline-info me-1" onclick="testNotificationTemplate('token_refresh')">
+                          <i class="bi bi-send me-1"></i>测试
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary me-1" onclick="resetNotificationTemplate('token_refresh')">
+                          <i class="bi bi-arrow-counterclockwise me-1"></i>恢复默认
+                        </button>
+                        <button class="btn btn-sm btn-primary" onclick="saveNotificationTemplate('token_refresh')">
+                          <i class="bi bi-check-lg me-1"></i>保存
+                        </button>
+                      </div>
+                    </div>
+                    <div class="mb-2">
+                      <small class="text-muted">可用变量（点击插入）：</small>
+                      <div class="d-flex flex-wrap gap-1 mt-1">
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('token_refresh', '{account_id}')">{account_id}</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('token_refresh', '{time}')">{time}</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('token_refresh', '{error_message}')">{error_message}</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('token_refresh', '{verification_url}')">{verification_url}</button>
+                      </div>
+                    </div>
+                    <textarea class="form-control font-monospace" id="token_refresh-template-editor" rows="12"
+                              oninput="updateTemplatePreview('token_refresh')"></textarea>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label"><strong>实时预览</strong></label>
+                    <div class="border rounded p-3 bg-light" style="min-height: 280px; white-space: pre-wrap; font-family: monospace;"
+                         id="token_refresh-template-preview"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 自动发货通知模板 -->
+              <div class="tab-pane fade" id="delivery-template" role="tabpanel" aria-labelledby="delivery-template-tab">
+                <div class="row">
+                  <div class="col-md-6">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                      <label class="form-label mb-0"><strong>模板编辑器</strong></label>
+                      <div>
+                        <button class="btn btn-sm btn-outline-info me-1" onclick="testNotificationTemplate('delivery')">
+                          <i class="bi bi-send me-1"></i>测试
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary me-1" onclick="resetNotificationTemplate('delivery')">
+                          <i class="bi bi-arrow-counterclockwise me-1"></i>恢复默认
+                        </button>
+                        <button class="btn btn-sm btn-primary" onclick="saveNotificationTemplate('delivery')">
+                          <i class="bi bi-check-lg me-1"></i>保存
+                        </button>
+                      </div>
+                    </div>
+                    <div class="mb-2">
+                      <small class="text-muted">可用变量（点击插入）：</small>
+                      <div class="d-flex flex-wrap gap-1 mt-1">
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('delivery', '{account_id}')">{account_id}</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('delivery', '{buyer_name}')">{buyer_name}</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('delivery', '{buyer_id}')">{buyer_id}</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('delivery', '{item_id}')">{item_id}</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('delivery', '{chat_id}')">{chat_id}</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('delivery', '{result}')">{result}</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('delivery', '{time}')">{time}</button>
+                      </div>
+                    </div>
+                    <textarea class="form-control font-monospace" id="delivery-template-editor" rows="12"
+                              oninput="updateTemplatePreview('delivery')"></textarea>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label"><strong>实时预览</strong></label>
+                    <div class="border rounded p-3 bg-light" style="min-height: 280px; white-space: pre-wrap; font-family: monospace;"
+                         id="delivery-template-preview"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 滑块验证成功模板 -->
+              <div class="tab-pane fade" id="slider_success-template" role="tabpanel" aria-labelledby="slider_success-template-tab">
+                <div class="row">
+                  <div class="col-md-6">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                      <label class="form-label mb-0"><strong>模板编辑器</strong></label>
+                      <div>
+                        <button class="btn btn-sm btn-outline-info me-1" onclick="testNotificationTemplate('slider_success')">
+                          <i class="bi bi-send me-1"></i>测试
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary me-1" onclick="resetNotificationTemplate('slider_success')">
+                          <i class="bi bi-arrow-counterclockwise me-1"></i>恢复默认
+                        </button>
+                        <button class="btn btn-sm btn-primary" onclick="saveNotificationTemplate('slider_success')">
+                          <i class="bi bi-check-lg me-1"></i>保存
+                        </button>
+                      </div>
+                    </div>
+                    <div class="mb-2">
+                      <small class="text-muted">可用变量（点击插入）：</small>
+                      <div class="d-flex flex-wrap gap-1 mt-1">
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('slider_success', '{account_id}')">{account_id}</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('slider_success', '{time}')">{time}</button>
+                      </div>
+                    </div>
+                    <textarea class="form-control font-monospace" id="slider_success-template-editor" rows="12"
+                              oninput="updateTemplatePreview('slider_success')"></textarea>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label"><strong>实时预览</strong></label>
+                    <div class="border rounded p-3 bg-light" style="min-height: 280px; white-space: pre-wrap; font-family: monospace;"
+                         id="slider_success-template-preview"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 人脸验证模板 -->
+              <div class="tab-pane fade" id="face_verify-template" role="tabpanel" aria-labelledby="face_verify-template-tab">
+                <div class="row">
+                  <div class="col-md-6">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                      <label class="form-label mb-0"><strong>模板编辑器</strong></label>
+                      <div>
+                        <button class="btn btn-sm btn-outline-info me-1" onclick="testNotificationTemplate('face_verify')">
+                          <i class="bi bi-send me-1"></i>测试
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary me-1" onclick="resetNotificationTemplate('face_verify')">
+                          <i class="bi bi-arrow-counterclockwise me-1"></i>恢复默认
+                        </button>
+                        <button class="btn btn-sm btn-primary" onclick="saveNotificationTemplate('face_verify')">
+                          <i class="bi bi-check-lg me-1"></i>保存
+                        </button>
+                      </div>
+                    </div>
+                    <div class="mb-2">
+                      <small class="text-muted">可用变量（点击插入）：</small>
+                      <div class="d-flex flex-wrap gap-1 mt-1">
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('face_verify', '{account_id}')">{account_id}</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('face_verify', '{time}')">{time}</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('face_verify', '{verification_url}')">{verification_url}</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('face_verify', '{verification_type}')">{verification_type}</button>
+                      </div>
+                    </div>
+                    <textarea class="form-control font-monospace" id="face_verify-template-editor" rows="12"
+                              oninput="updateTemplatePreview('face_verify')"></textarea>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label"><strong>实时预览</strong></label>
+                    <div class="border rounded p-3 bg-light" style="min-height: 280px; white-space: pre-wrap; font-family: monospace;"
+                         id="face_verify-template-preview"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 密码登录成功模板 -->
+              <div class="tab-pane fade" id="password_login_success-template" role="tabpanel" aria-labelledby="password_login_success-template-tab">
+                <div class="row">
+                  <div class="col-md-6">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                      <label class="form-label mb-0"><strong>模板编辑器</strong></label>
+                      <div>
+                        <button class="btn btn-sm btn-outline-info me-1" onclick="testNotificationTemplate('password_login_success')">
+                          <i class="bi bi-send me-1"></i>测试
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary me-1" onclick="resetNotificationTemplate('password_login_success')">
+                          <i class="bi bi-arrow-counterclockwise me-1"></i>恢复默认
+                        </button>
+                        <button class="btn btn-sm btn-primary" onclick="saveNotificationTemplate('password_login_success')">
+                          <i class="bi bi-check-lg me-1"></i>保存
+                        </button>
+                      </div>
+                    </div>
+                    <div class="mb-2">
+                      <small class="text-muted">可用变量（点击插入）：</small>
+                      <div class="d-flex flex-wrap gap-1 mt-1">
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('password_login_success', '{account_id}')">{account_id}</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('password_login_success', '{time}')">{time}</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('password_login_success', '{cookie_count}')">{cookie_count}</button>
+                      </div>
+                    </div>
+                    <textarea class="form-control font-monospace" id="password_login_success-template-editor" rows="12"
+                              oninput="updateTemplatePreview('password_login_success')"></textarea>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label"><strong>实时预览</strong></label>
+                    <div class="border rounded p-3 bg-light" style="min-height: 280px; white-space: pre-wrap; font-family: monospace;"
+                         id="password_login_success-template-preview"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 刷新Cookie成功模板 -->
+              <div class="tab-pane fade" id="cookie_refresh_success-template" role="tabpanel" aria-labelledby="cookie_refresh_success-template-tab">
+                <div class="row">
+                  <div class="col-md-6">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                      <label class="form-label mb-0"><strong>模板编辑器</strong></label>
+                      <div>
+                        <button class="btn btn-sm btn-outline-info me-1" onclick="testNotificationTemplate('cookie_refresh_success')">
+                          <i class="bi bi-send me-1"></i>测试
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary me-1" onclick="resetNotificationTemplate('cookie_refresh_success')">
+                          <i class="bi bi-arrow-counterclockwise me-1"></i>恢复默认
+                        </button>
+                        <button class="btn btn-sm btn-primary" onclick="saveNotificationTemplate('cookie_refresh_success')">
+                          <i class="bi bi-check-lg me-1"></i>保存
+                        </button>
+                      </div>
+                    </div>
+                    <div class="mb-2">
+                      <small class="text-muted">可用变量（点击插入）：</small>
+                      <div class="d-flex flex-wrap gap-1 mt-1">
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('cookie_refresh_success', '{account_id}')">{account_id}</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('cookie_refresh_success', '{time}')">{time}</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="insertTemplateVariable('cookie_refresh_success', '{cookie_count}')">{cookie_count}</button>
+                      </div>
+                    </div>
+                    <textarea class="form-control font-monospace" id="cookie_refresh_success-template-editor" rows="12"
+                              oninput="updateTemplatePreview('cookie_refresh_success')"></textarea>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label"><strong>实时预览</strong></label>
+                    <div class="border rounded p-3 bg-light" style="min-height: 280px; white-space: pre-wrap; font-family: monospace;"
+                         id="cookie_refresh_success-template-preview"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 账号通知配置 -->
         <div class="card">
           <div class="card-header d-flex justify-content-between align-items-center">
             <span><i class="bi bi-gear me-2"></i>账号通知配置</span>
@@ -3616,16 +3955,35 @@
                 </div>
 
                 <div id="aiReplySettings" style="display: none;">
+                  <div class="row mb-3 align-items-end">
+                    <div class="col">
+                      <label class="form-label">API配置预设</label>
+                      <div class="d-flex gap-2">
+                        <select class="form-select" id="aiPresetSelect" onchange="loadAIPreset()">
+                          <option value="">-- 选择预设 --</option>
+                        </select>
+                        <button type="button" class="btn btn-outline-primary btn-sm text-nowrap" onclick="saveCurrentAsPreset()">保存预设</button>
+                        <button type="button" class="btn btn-outline-danger btn-sm text-nowrap" id="deletePresetBtn" style="display:none;" onclick="deleteSelectedPreset()">删除</button>
+                      </div>
+                    </div>
+                  </div>
                   <div class="row mb-3">
                     <div class="col-md-6">
-                      <label for="aiModelName" class="form-label"></label>AI模型</label>
+                      <label for="aiModelName" class="form-label">AI模型</label>
                       <select class="form-select" id="aiModelName" onchange="toggleCustomModelInput()">
-                        <option value="qwen-plus">通义千问Plus</option>
-                        <option value="qwen-turbo">通义千问Turbo</option>
-                        <option value="qwen-max">通义千问Max</option>
-                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                        <option value="gpt-4">GPT-4</option>
-                        <option value="custom">自定义模型</option>
+                        <optgroup label="DashScope (推荐)">
+                          <option value="deepseek-v3.2">DeepSeek V3.2</option>
+                          <option value="kimi-k2.5">Kimi K2.5</option>
+                          <option value="qwen3-max-2026-01-23">通义千问3 Max</option>
+                          <option value="qwen3.5-plus">通义千问3.5 Plus (推理)</option>
+                        </optgroup>
+                        <optgroup label="OpenAI">
+                          <option value="gpt-4o-mini">GPT-4o Mini</option>
+                          <option value="gpt-4o">GPT-4o</option>
+                        </optgroup>
+                        <optgroup label="其他">
+                          <option value="custom">自定义模型</option>
+                        </optgroup>
                       </select>
                       <input type="text" class="form-control mt-2" id="customModelName" placeholder="请输入自定义模型名称"
                         style="display: none;">
@@ -3686,13 +4044,27 @@
                 <h6 class="mb-0"><i class="bi bi-chat-quote me-2"></i>提示词设置</h6>
               </div>
               <div class="card-body">
+                <small class="form-text text-muted d-block mb-3">留空使用系统默认提示词，填写则覆盖对应场景的默认策略。</small>
+
                 <div class="mb-3">
-                  <label class="form-label">自定义提示词 (JSON格式)</label>
-                  <textarea class="form-control" id="customPrompts" rows="8"
-                            placeholder='{"classify": "分类提示词", "price": "议价提示词", "tech": "技术提示词", "default": "默认提示词"}'></textarea>
-                  <small class="form-text text-muted">
-                    留空使用系统默认提示词。格式：{"classify": "...", "price": "...", "tech": "...", "default": "..."}
-                  </small>
+                  <label class="form-label fw-bold">议价场景</label>
+                  <small class="form-text text-muted d-block mb-1">当买家明确要求降价、优惠、砍价时的应对策略</small>
+                  <textarea class="form-control" id="promptPrice" rows="4"
+                            placeholder="【议价场景】&#10;策略：根据议价次数递减优惠&#10;- 第1次：可小幅优惠，表达诚意&#10;- 第2次：中等优惠，强调已是优惠价&#10;- 第3次及以后：最大优惠或坚持底线&#10;语气友好但坚定，突出商品价值和优势。"></textarea>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label fw-bold">技术/产品问题</label>
+                  <small class="form-text text-muted d-block mb-1">当买家询问产品功能、使用方法、技术细节时的回复策略</small>
+                  <textarea class="form-control" id="promptTech" rows="3"
+                            placeholder="【技术/产品问题】&#10;基于商品信息回答，不要自行发挥。&#10;如果问题超出商品信息范围，回复：&quot;等等，这个我需要看一看&quot;"></textarea>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label fw-bold">一般咨询</label>
+                  <small class="form-text text-muted d-block mb-1">物流、售后、商品介绍等其他咨询的回复策略</small>
+                  <textarea class="form-control" id="promptDefault" rows="3"
+                            placeholder="【一般咨询】&#10;基于商品信息回答物流、售后等问题。&#10;如果问题超出商品信息范围，回复：&quot;等等，这个我需要看一看&quot;&#10;如果客户明确询问退款，回复：&quot;虚拟产品，一旦发出是不可以退款的&quot;"></textarea>
                 </div>
               </div>
             </div>
@@ -3801,7 +4173,7 @@
               <div class="col-md-6">
                 <div class="mb-3">
                   <label class="form-label">关键词（支持多个） <span class="text-danger">*</span></label>
-                  <input type="text" class="form-control" id="imageKeyword" placeholder="例如：图片|照片|看图（用 | 分隔）" required>
+                  <textarea class="form-control" id="imageKeyword" rows="3" placeholder="每行一个关键词，或用 | 分隔&#10;例如：&#10;图片&#10;照片&#10;看图" required></textarea>
                   <div class="form-text">用户发送此关键词时将回复图片，支持多个关键词用 | 或换行分隔</div>
                 </div>
                 <div class="mb-3">

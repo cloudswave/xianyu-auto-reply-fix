@@ -15,6 +15,8 @@ import tempfile
 import shutil
 from datetime import datetime
 from playwright.sync_api import sync_playwright, ElementHandle
+from playwright.async_api import async_playwright
+import asyncio
 from typing import Optional, Tuple, List, Dict, Any, Callable
 from loguru import logger
 from collections import defaultdict
@@ -3873,11 +3875,79 @@ class XianyuSliderStealth:
                     continue
             
             return False, None
-            
+
         except Exception as e:
             logger.debug(f"【{self.pure_user_id}】检查登录错误时出错: {e}")
             return False, None
-    
+
+    def _detect_verification_type(self, frame) -> str:
+        """检测 iframe 内的具体验证类型
+
+        Args:
+            frame: iframe 的 content_frame
+
+        Returns:
+            str: 验证类型 - 'password_error' / 'face_verify' / 'sms_verify' / 'qr_verify' / 'unknown'
+        """
+        try:
+            # 获取 frame 内容
+            content = ""
+            try:
+                content = frame.content()
+            except:
+                pass
+
+            # 1. 检查是否是账密错误
+            password_error_keywords = ['账密错误', '账号密码错误', '用户名或密码错误', '密码错误', '账号或密码错误', '登录失败']
+            for keyword in password_error_keywords:
+                if keyword in content:
+                    logger.info(f"【{self.pure_user_id}】检测到验证类型: 账密错误 (关键词: {keyword})")
+                    return 'password_error'
+
+            # 2. 检查是否是短信验证
+            sms_keywords = ['短信验证', '验证码', '手机号', '发送验证码', '获取验证码']
+            sms_count = sum(1 for keyword in sms_keywords if keyword in content)
+            if sms_count >= 2:  # 至少匹配2个关键词
+                logger.info(f"【{self.pure_user_id}】检测到验证类型: 短信验证")
+                return 'sms_verify'
+
+            # 3. 检查是否是二维码验证
+            qr_keywords = ['扫码', '二维码', '扫一扫', '手机淘宝', '手机扫码']
+            for keyword in qr_keywords:
+                if keyword in content:
+                    logger.info(f"【{self.pure_user_id}】检测到验证类型: 二维码验证 (关键词: {keyword})")
+                    return 'qr_verify'
+
+            # 4. 检查是否是人脸验证
+            face_keywords = ['人脸', '刷脸', '面部', '拍摄脸部', 'face']
+            for keyword in face_keywords:
+                if keyword in content.lower():
+                    logger.info(f"【{self.pure_user_id}】检测到验证类型: 人脸验证 (关键词: {keyword})")
+                    return 'face_verify'
+
+            # 5. 检查 URL 特征
+            frame_url = ""
+            try:
+                frame_url = frame.url if hasattr(frame, 'url') else ""
+            except:
+                pass
+
+            if 'sms' in frame_url.lower() or 'phone' in frame_url.lower():
+                logger.info(f"【{self.pure_user_id}】检测到验证类型: 短信验证 (URL特征)")
+                return 'sms_verify'
+
+            if 'qrcode' in frame_url.lower() or 'scan' in frame_url.lower():
+                logger.info(f"【{self.pure_user_id}】检测到验证类型: 二维码验证 (URL特征)")
+                return 'qr_verify'
+
+            # 默认当作未知验证类型
+            logger.info(f"【{self.pure_user_id}】无法确定验证类型，标记为未知")
+            return 'unknown'
+
+        except Exception as e:
+            logger.debug(f"【{self.pure_user_id}】检测验证类型时出错: {e}")
+            return 'unknown'
+
     def _detect_qr_code_verification(self, page) -> tuple:
         """检测是否存在二维码/人脸验证（排除滑块验证）
         
@@ -3953,7 +4023,7 @@ class XianyuSliderStealth:
                             continue
                 except:
                     continue
-            
+
             # 检测所有frames中的二维码/人脸验证
             # 首先检查是否有 alibaba-login-box iframe（人脸验证或短信验证）
             try:
@@ -3962,11 +4032,83 @@ class XianyuSliderStealth:
                     try:
                         iframe_id = iframe.get_attribute('id')
                         if iframe_id == 'alibaba-login-box':
-                            logger.info(f"【{self.pure_user_id}】✅ 检测到 alibaba-login-box iframe（人脸验证/短信验证）")
+                            logger.info(f"【{self.pure_user_id}】✅ 检测到 alibaba-login-box iframe")
                             frame = iframe.content_frame()
                             if frame:
-                                logger.info(f"【{self.pure_user_id}】人脸验证/短信验证Frame URL: {frame.url if hasattr(frame, 'url') else '未知'}")
-                                
+                                frame_url = frame.url if hasattr(frame, 'url') else '未知'
+                                logger.info(f"【{self.pure_user_id}】验证Frame URL: {frame_url}")
+
+                                # 先检测具体的验证类型
+                                verification_type = self._detect_verification_type(frame)
+                                logger.info(f"【{self.pure_user_id}】检测到验证类型: {verification_type}")
+
+                                # 记录风控日志
+                                try:
+                                    from db_manager import db_manager
+                                    event_type_map = {
+                                        'password_error': 'password_error',
+                                        'sms_verify': 'sms_verify',
+                                        'qr_verify': 'qr_verify',
+                                        'face_verify': 'face_verify',
+                                        'unknown': 'face_verify'
+                                    }
+                                    event_type_names = {
+                                        'password_error': '账号密码错误',
+                                        'sms_verify': '短信验证',
+                                        'qr_verify': '二维码验证',
+                                        'face_verify': '人脸验证',
+                                        'unknown': '身份验证'
+                                    }
+                                    db_event_type = event_type_map.get(verification_type, 'face_verify')
+                                    event_name = event_type_names.get(verification_type, '身份验证')
+                                    db_manager.add_risk_control_log(
+                                        cookie_id=self.pure_user_id,
+                                        event_type=db_event_type,
+                                        event_description=f"检测到{event_name}",
+                                        processing_status='processing' if verification_type != 'password_error' else 'failed',
+                                        error_message=f"触发场景: 密码登录, URL: {frame_url}"
+                                    )
+                                    logger.info(f"【{self.pure_user_id}】已记录风控日志: {db_event_type}")
+                                except Exception as log_err:
+                                    logger.warning(f"【{self.pure_user_id}】记录风控日志失败: {log_err}")
+
+                                # 如果是账密错误，抛出异常让调用者处理
+                                if verification_type == 'password_error':
+                                    logger.error(f"【{self.pure_user_id}】❌ 检测到账号密码错误")
+                                    raise Exception("账号密码错误，请检查账号密码是否正确")
+
+                                # 如果是短信验证
+                                if verification_type == 'sms_verify':
+                                    logger.warning(f"【{self.pure_user_id}】⚠️ 需要短信验证，暂不支持自动处理")
+                                    # 创建一个包含验证类型的frame对象
+                                    class VerificationFrame:
+                                        def __init__(self, original_frame, verify_type, verify_url=None, screenshot_path=None):
+                                            self._original_frame = original_frame
+                                            self.verification_type = verify_type
+                                            self.verify_url = verify_url
+                                            self.screenshot_path = screenshot_path
+
+                                        def __getattr__(self, name):
+                                            return getattr(self._original_frame, name)
+
+                                    return True, VerificationFrame(frame, 'sms_verify')
+
+                                # 如果是二维码验证
+                                if verification_type == 'qr_verify':
+                                    logger.warning(f"【{self.pure_user_id}】⚠️ 需要二维码验证")
+                                    class VerificationFrame:
+                                        def __init__(self, original_frame, verify_type, verify_url=None, screenshot_path=None):
+                                            self._original_frame = original_frame
+                                            self.verification_type = verify_type
+                                            self.verify_url = verify_url
+                                            self.screenshot_path = screenshot_path
+
+                                        def __getattr__(self, name):
+                                            return getattr(self._original_frame, name)
+
+                                    return True, VerificationFrame(frame, 'qr_verify')
+
+                                # 人脸验证或未知类型，继续原有逻辑
                                 # 尝试自动点击"其他验证方式"，然后找到"通过拍摄脸部"的验证按钮
                                 face_verify_url = self._get_face_verification_url(frame)
                                 if face_verify_url:
@@ -4332,6 +4474,13 @@ class XianyuSliderStealth:
                 '--disable-web-security',
                 '--disable-features=VizDisplayCompositor',
                 '--lang=zh-CN',  # 设置浏览器语言为中文
+                # 反检测增强参数
+                '--disable-infobars',
+                '--disable-extensions',
+                '--disable-popup-blocking',
+                '--disable-background-timer-throttling',
+                '--disable-backgrounding-occluded-windows',
+                '--disable-renderer-backgrounding',
             ]
             
             # 在启动Playwright之前，重新检查和设置浏览器路径
@@ -4368,7 +4517,7 @@ class XianyuSliderStealth:
                 headless=not show_browser,
                 args=browser_args,
                 viewport={'width': 1980, 'height': 1024},
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 locale='zh-CN',  # 设置浏览器区域为中文
                 accept_downloads=True,
                 ignore_https_errors=True,
@@ -4380,13 +4529,37 @@ class XianyuSliderStealth:
             
             browser = context.browser
             page = context.new_page()
+
+            # 注入反检测脚本
+            stealth_js = """
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+            Object.defineProperty(navigator, 'languages', { get: () => ['zh-CN', 'zh', 'en'] });
+            window.chrome = { runtime: {} };
+            """
+            page.add_init_script(stealth_js)
+
             logger.info(f"【{self.pure_user_id}】浏览器已成功启动（{browser_mode}模式）")
             
             try:
-                # 访问登录页面
+                # 访问登录页面（带重试逻辑）
                 login_url = "https://www.goofish.com/im"
                 logger.info(f"【{self.pure_user_id}】访问登录页面: {login_url}")
-                page.goto(login_url, wait_until='networkidle', timeout=60000)
+
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        page.goto(login_url, wait_until='networkidle', timeout=60000)
+                        break
+                    except Exception as e:
+                        error_msg = str(e)
+                        if any(err in error_msg for err in ['ERR_CONNECTION_CLOSED', 'ERR_CONNECTION_RESET', 'ERR_CONNECTION_REFUSED']):
+                            if attempt < max_retries - 1:
+                                wait_time = 2 * (attempt + 1)
+                                logger.warning(f"【{self.pure_user_id}】连接被关闭，{wait_time}秒后第{attempt+2}次重试...")
+                                time.sleep(wait_time)
+                                continue
+                        raise
                 
                 # 等待页面加载
                 wait_time = 2 if not show_browser else 2
@@ -4890,8 +5063,21 @@ class XianyuSliderStealth:
                                 has_qr, qr_frame = self._detect_qr_code_verification(page)
                         
                         if has_qr:
-                            logger.warning(f"【{self.pure_user_id}】⚠️ 检测到二维码/人脸验证")
-                            logger.info(f"【{self.pure_user_id}】请在浏览器中完成二维码/人脸验证")
+                            # 获取验证类型
+                            verification_type = 'unknown'
+                            if qr_frame and hasattr(qr_frame, 'verification_type'):
+                                verification_type = qr_frame.verification_type
+
+                            # 根据验证类型输出不同的日志
+                            verification_type_names = {
+                                'face_verify': '人脸验证',
+                                'sms_verify': '短信验证',
+                                'qr_verify': '二维码验证',
+                                'unknown': '身份验证'
+                            }
+                            type_name = verification_type_names.get(verification_type, '身份验证')
+                            logger.warning(f"【{self.pure_user_id}】⚠️ 检测到{type_name}")
+                            logger.info(f"【{self.pure_user_id}】请在浏览器中完成{type_name}")
                             
                             # 获取验证链接URL和截图路径
                             frame_url = None
@@ -4932,31 +5118,38 @@ class XianyuSliderStealth:
                                 logger.warning(f"【{self.pure_user_id}】" + "=" * 60)
                             
                             logger.info(f"【{self.pure_user_id}】请在浏览器中完成验证，程序将持续等待...")
-                            
+
                             # 【重要】发送通知给客户
                             if notification_callback:
                                 try:
                                     if screenshot_path or frame_url:
-                                        # 构造清晰的通知消息
+                                        # 根据验证类型构造不同的通知消息
+                                        verification_type_titles = {
+                                            'face_verify': '⚠️ 账号密码登录需要人脸验证',
+                                            'sms_verify': '⚠️ 账号密码登录需要短信验证',
+                                            'qr_verify': '⚠️ 账号密码登录需要二维码验证',
+                                            'unknown': '⚠️ 账号密码登录需要身份验证'
+                                        }
+                                        title = verification_type_titles.get(verification_type, '⚠️ 账号密码登录需要身份验证')
+
                                         if screenshot_path:
-                                            
                                             notification_msg = (
-                                                f"⚠️ 账号密码登录需要人脸验证\n\n"
+                                                f"{title}\n\n"
                                                 f"账号: {self.pure_user_id}\n"
                                                 f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-                                                f"请登录自动化网站，访问账号管理模块，进行对应账号的人脸验证"
+                                                f"请登录自动化网站，访问账号管理模块，进行对应账号的验证。"
                                                 f"在验证期间，闲鱼自动回复暂时无法使用。"
                                             )
                                         else:
                                             notification_msg = (
-                                                f"⚠️ 账号密码登录需要人脸验证\n\n"
+                                                f"{title}\n\n"
                                                 f"账号: {self.pure_user_id}\n"
                                                 f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
                                                 f"请点击验证链接完成验证:\n{frame_url}\n\n"
                                                 f"在验证期间，闲鱼自动回复暂时无法使用。"
                                             )
-                                        
-                                        logger.info(f"【{self.pure_user_id}】准备发送人脸验证通知，截图路径: {screenshot_path}, URL: {frame_url}")
+
+                                        logger.info(f"【{self.pure_user_id}】准备发送{type_name}通知，截图路径: {screenshot_path}, URL: {frame_url}")
                                         
                                         # 如果回调是异步函数，使用 asyncio.run 在新的事件循环中运行
                                         import asyncio
@@ -5653,6 +5846,36 @@ class XianyuSliderStealth:
         finally:
             # 关闭浏览器
             self.close_browser()
+
+    async def async_run(self, url: str):
+        """异步运行主流程，返回(成功状态, cookie数据)
+
+        在独立线程中运行同步的 Playwright，避免事件循环冲突
+        """
+        import asyncio
+
+        def _run_in_thread():
+            """在独立线程中运行同步代码"""
+            import asyncio
+            # 确保线程中没有运行的事件循环
+            try:
+                loop = asyncio.get_running_loop()
+                # 如果有运行中的循环，创建新循环
+                asyncio.set_event_loop(asyncio.new_event_loop())
+            except RuntimeError:
+                # 没有运行中的循环，正常
+                pass
+
+            # 调用同步的 run 方法
+            return self.run(url)
+
+        # 使用 asyncio.to_thread 在独立线程中运行
+        return await asyncio.to_thread(_run_in_thread)
+
+    async def _async_close_browser(self):
+        """异步版本的清理方法（兼容性保留，实际清理由同步 run 方法完成）"""
+        # 由于 async_run 现在调用同步的 run 方法，清理工作已经在 run 的 finally 中完成
+        pass
 
 def get_slider_stats():
     """获取滑块验证并发统计信息"""

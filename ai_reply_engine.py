@@ -51,12 +51,16 @@ class AIReplyEngine:
         settings = db_manager.get_ai_reply_settings(cookie_id)
         if not settings['ai_enabled'] or not settings['api_key']:
             return None
-        
+
         try:
-            logger.info(f"创建OpenAI客户端: base_url={settings['base_url']}")
+            base_url = settings['base_url'].rstrip('/')
+            # 确保 base_url 以 /v1 结尾（OpenAI SDK 要求）
+            if not base_url.endswith('/v1'):
+                base_url = base_url + '/v1'
+            logger.info(f"创建OpenAI客户端: base_url={base_url}")
             client = OpenAI(
                 api_key=settings['api_key'],
-                base_url=settings['base_url']
+                base_url=base_url
             )
             return client
         except Exception as e:

@@ -166,6 +166,22 @@ class DBManager:
             )
             ''')
 
+            # 创建AI配置预设表
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ai_config_presets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                preset_name TEXT NOT NULL,
+                model_name TEXT NOT NULL,
+                api_key TEXT NOT NULL DEFAULT '',
+                base_url TEXT NOT NULL DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                UNIQUE(user_id, preset_name)
+            )
+            ''')
+
             # 创建AI对话历史表
             cursor.execute('''
             CREATE TABLE IF NOT EXISTS ai_conversations (
@@ -461,6 +477,74 @@ class DBManager:
             )
             ''')
 
+            # 创建通知模板表
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS notification_templates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                type TEXT NOT NULL UNIQUE CHECK (type IN ('message', 'token_refresh', 'delivery', 'slider_success', 'face_verify', 'password_login_success', 'cookie_refresh_success')),
+                template TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            ''')
+
+            # 插入默认通知模板
+            cursor.execute('''
+            INSERT OR IGNORE INTO notification_templates (type, template) VALUES
+            ('message', '🚨 接收消息通知
+
+账号: {account_id}
+买家: {buyer_name} (ID: {buyer_id})
+商品ID: {item_id}
+聊天ID: {chat_id}
+消息内容: {message}
+
+时间: {time}'),
+            ('token_refresh', 'Token刷新异常
+
+账号ID: {account_id}
+异常时间: {time}
+异常信息: {error_message}
+
+请检查账号Cookie是否过期，如有需要请及时更新Cookie配置。'),
+            ('delivery', '🚨 自动发货通知
+
+账号: {account_id}
+买家: {buyer_name} (ID: {buyer_id})
+商品ID: {item_id}
+聊天ID: {chat_id}
+结果: {result}
+时间: {time}
+
+请及时处理！'),
+            ('slider_success', '✅ 滑块验证成功，cookies已自动更新到数据库
+
+账号: {account_id}
+时间: {time}'),
+            ('face_verify', '⚠️ 需要{verification_type}或登录出错 🚫
+在验证期间，发货及自动回复暂时无法使用。
+
+请点击验证链接完成验证:
+{verification_url}
+
+账号: {account_id}
+时间: {time}'),
+            ('password_login_success', '✅ 密码登录成功
+
+账号: {account_id}
+时间: {time}
+Cookie数量: {cookie_count}
+
+账号Cookie已更新，正在重启服务...'),
+            ('cookie_refresh_success', '✅ 刷新Cookie成功
+
+账号: {account_id}
+时间: {time}
+Cookie数量: {cookie_count}
+
+账号已可正常使用。')
+            ''')
+
             # 插入默认系统设置（不包括管理员密码，由reply_server.py初始化）
             cursor.execute('''
             INSERT OR IGNORE INTO system_settings (key, value, description) VALUES
@@ -526,6 +610,9 @@ class DBManager:
                 logger.info("添加cookies表的auto_comment列...")
                 cursor.execute("ALTER TABLE cookies ADD COLUMN auto_comment INTEGER DEFAULT 0")
                 logger.info("数据库迁移完成：添加auto_comment列")
+
+            # 迁移notification_templates表以支持新的模板类型
+            self._migrate_notification_templates(cursor)
 
         except Exception as e:
             logger.error(f"数据库迁移失败: {e}")
@@ -602,7 +689,78 @@ class DBManager:
                         pass
             else:
                 logger.error(f"检查cards表约束时出现未知错误: {e}")
-            
+
+    def _migrate_notification_templates(self, cursor):
+        """迁移notification_templates表以支持新的模板类型"""
+        try:
+            # 检查是否已存在cookie_refresh_success模板
+            cursor.execute("SELECT COUNT(*) FROM notification_templates WHERE type = 'cookie_refresh_success'")
+            if cursor.fetchone()[0] == 0:
+                logger.info("添加Cookie刷新成功通知模板...")
+
+                # 重建表以更新CHECK约束
+                cursor.execute('''
+                CREATE TABLE IF NOT EXISTS notification_templates_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    type TEXT NOT NULL UNIQUE CHECK (type IN ('message', 'token_refresh', 'delivery', 'slider_success', 'face_verify', 'password_login_success', 'cookie_refresh_success')),
+                    template TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                ''')
+
+                # 复制现有数据
+                cursor.execute('''
+                INSERT OR IGNORE INTO notification_templates_new (id, type, template, created_at, updated_at)
+                SELECT id, type, template, created_at, updated_at FROM notification_templates
+                ''')
+
+                # 删除旧表
+                cursor.execute("DROP TABLE notification_templates")
+
+                # 重命名新表
+                cursor.execute("ALTER TABLE notification_templates_new RENAME TO notification_templates")
+
+                # 插入新的默认模板（包括之前可能缺失的）
+                cursor.execute('''
+                INSERT OR IGNORE INTO notification_templates (type, template) VALUES
+                ('slider_success', '✅ 滑块验证成功，cookies已自动更新到数据库
+
+账号: {account_id}
+时间: {time}'),
+                ('face_verify', '⚠️ 需要{verification_type}或登录出错 🚫
+在验证期间，发货及自动回复暂时无法使用。
+
+请点击验证链接完成验证:
+{verification_url}
+
+账号: {account_id}
+时间: {time}'),
+                ('password_login_success', '✅ 密码登录成功
+
+账号: {account_id}
+时间: {time}
+Cookie数量: {cookie_count}
+
+账号Cookie已更新，正在重启服务...'),
+                ('cookie_refresh_success', '✅ 刷新Cookie成功
+
+账号: {account_id}
+时间: {time}
+Cookie数量: {cookie_count}
+
+账号已可正常使用。')
+                ''')
+
+                logger.info("通知模板类型迁移完成")
+        except Exception as e:
+            logger.warning(f"迁移notification_templates表时出错（可能表不存在）: {e}")
+            # 如果迁移失败，尝试清理
+            try:
+                cursor.execute("DROP TABLE IF EXISTS notification_templates_new")
+            except:
+                pass
+
     def check_and_upgrade_db(self, cursor):
         """检查数据库版本并执行必要的升级"""
         try:
@@ -2367,6 +2525,73 @@ class DBManager:
                 logger.error(f"获取所有AI回复设置失败: {e}")
                 return {}
 
+    # -------------------- AI配置预设操作 --------------------
+    def save_ai_config_preset(self, user_id: int, preset_name: str, model_name: str, api_key: str = '', base_url: str = '') -> int:
+        """保存AI配置预设（存在则更新）"""
+        with self.lock:
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute('''
+                INSERT INTO ai_config_presets (user_id, preset_name, model_name, api_key, base_url, updated_at)
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(user_id, preset_name) DO UPDATE SET
+                    model_name = excluded.model_name,
+                    api_key = excluded.api_key,
+                    base_url = excluded.base_url,
+                    updated_at = CURRENT_TIMESTAMP
+                ''', (user_id, preset_name, model_name, api_key, base_url))
+                self.conn.commit()
+                preset_id = cursor.lastrowid
+                logger.debug(f"保存AI配置预设: user_id={user_id}, preset_name={preset_name}")
+                return preset_id
+            except Exception as e:
+                logger.error(f"保存AI配置预设失败: {e}")
+                raise
+
+    def get_ai_config_presets(self, user_id: int) -> list:
+        """获取用户的所有AI配置预设"""
+        with self.lock:
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute('''
+                SELECT id, preset_name, model_name, api_key, base_url, created_at, updated_at
+                FROM ai_config_presets
+                WHERE user_id = ?
+                ORDER BY updated_at DESC
+                ''', (user_id,))
+                presets = []
+                for row in cursor.fetchall():
+                    presets.append({
+                        'id': row[0],
+                        'preset_name': row[1],
+                        'model_name': row[2],
+                        'api_key': row[3],
+                        'base_url': row[4],
+                        'created_at': row[5],
+                        'updated_at': row[6]
+                    })
+                return presets
+            except Exception as e:
+                logger.error(f"获取AI配置预设失败: {e}")
+                return []
+
+    def delete_ai_config_preset(self, user_id: int, preset_id: int) -> bool:
+        """删除AI配置预设（带user_id校验）"""
+        with self.lock:
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute('''
+                DELETE FROM ai_config_presets WHERE id = ? AND user_id = ?
+                ''', (preset_id, user_id))
+                self.conn.commit()
+                deleted = cursor.rowcount > 0
+                if deleted:
+                    logger.debug(f"删除AI配置预设: preset_id={preset_id}, user_id={user_id}")
+                return deleted
+            except Exception as e:
+                logger.error(f"删除AI配置预设失败: {e}")
+                return False
+
     # -------------------- 默认回复操作 --------------------
     def save_default_reply(self, cookie_id: str, enabled: bool, reply_content: str = None, reply_once: bool = False):
         """保存默认回复设置"""
@@ -2698,6 +2923,198 @@ class DBManager:
                 logger.error(f"删除账号通知配置失败: {e}")
                 self.conn.rollback()
                 return False
+
+    # -------------------- 通知模板操作 --------------------
+    def get_all_notification_templates(self) -> List[Dict[str, any]]:
+        """获取所有通知模板"""
+        with self.lock:
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute('''
+                SELECT id, type, template, created_at, updated_at
+                FROM notification_templates
+                ORDER BY id
+                ''')
+
+                templates = []
+                for row in cursor.fetchall():
+                    templates.append({
+                        'id': row[0],
+                        'type': row[1],
+                        'template': row[2],
+                        'created_at': row[3],
+                        'updated_at': row[4]
+                    })
+
+                return templates
+            except Exception as e:
+                logger.error(f"获取通知模板失败: {e}")
+                return []
+
+    def get_notification_template(self, template_type: str) -> Optional[Dict[str, any]]:
+        """获取指定类型的通知模板"""
+        with self.lock:
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute('''
+                SELECT id, type, template, created_at, updated_at
+                FROM notification_templates
+                WHERE type = ?
+                ''', (template_type,))
+
+                row = cursor.fetchone()
+                if row:
+                    return {
+                        'id': row[0],
+                        'type': row[1],
+                        'template': row[2],
+                        'created_at': row[3],
+                        'updated_at': row[4]
+                    }
+                return None
+            except Exception as e:
+                logger.error(f"获取通知模板失败: {e}")
+                return None
+
+    def update_notification_template(self, template_type: str, template: str) -> bool:
+        """更新通知模板"""
+        with self.lock:
+            try:
+                cursor = self.conn.cursor()
+                self._execute_sql(cursor, '''
+                UPDATE notification_templates
+                SET template = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE type = ?
+                ''', (template, template_type))
+                self.conn.commit()
+                logger.info(f"更新通知模板: {template_type}")
+                return cursor.rowcount > 0
+            except Exception as e:
+                logger.error(f"更新通知模板失败: {e}")
+                self.conn.rollback()
+                return False
+
+    def reset_notification_template(self, template_type: str) -> bool:
+        """重置通知模板为默认值"""
+        default_templates = {
+            'message': '''🚨 接收消息通知
+
+账号: {account_id}
+买家: {buyer_name} (ID: {buyer_id})
+商品ID: {item_id}
+聊天ID: {chat_id}
+消息内容: {message}
+
+时间: {time}''',
+            'token_refresh': '''Token刷新异常
+
+账号ID: {account_id}
+异常时间: {time}
+异常信息: {error_message}
+
+请检查账号Cookie是否过期，如有需要请及时更新Cookie配置。''',
+            'delivery': '''🚨 自动发货通知
+
+账号: {account_id}
+买家: {buyer_name} (ID: {buyer_id})
+商品ID: {item_id}
+聊天ID: {chat_id}
+结果: {result}
+时间: {time}
+
+请及时处理！''',
+            'slider_success': '''✅ 滑块验证成功，cookies已自动更新到数据库
+
+账号: {account_id}
+时间: {time}''',
+            'face_verify': '''⚠️ 需要{verification_type}或登录出错 🚫
+在验证期间，发货及自动回复暂时无法使用。
+
+请点击验证链接完成验证:
+{verification_url}
+
+账号: {account_id}
+时间: {time}''',
+            'password_login_success': '''✅ 密码登录成功
+
+账号: {account_id}
+时间: {time}
+Cookie数量: {cookie_count}
+
+账号Cookie已更新，正在重启服务...''',
+            'cookie_refresh_success': '''✅ 刷新Cookie成功
+
+账号: {account_id}
+时间: {time}
+Cookie数量: {cookie_count}
+
+账号已可正常使用。'''
+        }
+
+        if template_type not in default_templates:
+            logger.error(f"未知的模板类型: {template_type}")
+            return False
+
+        return self.update_notification_template(template_type, default_templates[template_type])
+
+    def get_default_notification_template(self, template_type: str) -> Optional[str]:
+        """获取默认通知模板"""
+        default_templates = {
+            'message': '''🚨 接收消息通知
+
+账号: {account_id}
+买家: {buyer_name} (ID: {buyer_id})
+商品ID: {item_id}
+聊天ID: {chat_id}
+消息内容: {message}
+
+时间: {time}''',
+            'token_refresh': '''Token刷新异常
+
+账号ID: {account_id}
+异常时间: {time}
+异常信息: {error_message}
+
+请检查账号Cookie是否过期，如有需要请及时更新Cookie配置。''',
+            'delivery': '''🚨 自动发货通知
+
+账号: {account_id}
+买家: {buyer_name} (ID: {buyer_id})
+商品ID: {item_id}
+聊天ID: {chat_id}
+结果: {result}
+时间: {time}
+
+请及时处理！''',
+            'slider_success': '''✅ 滑块验证成功，cookies已自动更新到数据库
+
+账号: {account_id}
+时间: {time}''',
+            'face_verify': '''⚠️ 需要{verification_type}或登录出错 🚫
+在验证期间，发货及自动回复暂时无法使用。
+
+请点击验证链接完成验证:
+{verification_url}
+
+账号: {account_id}
+时间: {time}''',
+            'password_login_success': '''✅ 密码登录成功
+
+账号: {account_id}
+时间: {time}
+Cookie数量: {cookie_count}
+
+账号Cookie已更新，正在重启服务...''',
+            'cookie_refresh_success': '''✅ 刷新Cookie成功
+
+账号: {account_id}
+时间: {time}
+Cookie数量: {cookie_count}
+
+账号已可正常使用。'''
+        }
+
+        return default_templates.get(template_type)
 
     # -------------------- 备份和恢复操作 --------------------
     def export_backup(self, user_id: int = None) -> Dict[str, any]:
@@ -6115,7 +6532,7 @@ class DBManager:
 
     def add_risk_control_log(self, cookie_id: str, event_type: str = 'slider_captcha',
                            event_description: str = None, processing_result: str = None,
-                           processing_status: str = 'processing', error_message: str = None) -> bool:
+                           processing_status: str = 'processing', error_message: str = None):
         """
         添加风控日志记录
 
@@ -6128,7 +6545,7 @@ class DBManager:
             error_message: 错误信息
 
         Returns:
-            bool: 添加成功返回True，失败返回False
+            int or None: 添加成功返回日志ID，失败返回None
         """
         try:
             with self.lock:
@@ -6139,10 +6556,10 @@ class DBManager:
                     VALUES (?, ?, ?, ?, ?, ?)
                 ''', (cookie_id, event_type, event_description, processing_result, processing_status, error_message))
                 self.conn.commit()
-                return True
+                return cursor.lastrowid
         except Exception as e:
             logger.error(f"添加风控日志失败: {e}")
-            return False
+            return None
 
     def update_risk_control_log(self, log_id: int, processing_result: str = None,
                               processing_status: str = None, error_message: str = None) -> bool:
