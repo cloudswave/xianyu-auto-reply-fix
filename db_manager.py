@@ -166,6 +166,22 @@ class DBManager:
             )
             ''')
 
+            # 创建AI配置预设表
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ai_config_presets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                preset_name TEXT NOT NULL,
+                model_name TEXT NOT NULL,
+                api_key TEXT NOT NULL DEFAULT '',
+                base_url TEXT NOT NULL DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                UNIQUE(user_id, preset_name)
+            )
+            ''')
+
             # 创建AI对话历史表
             cursor.execute('''
             CREATE TABLE IF NOT EXISTS ai_conversations (
@@ -2508,6 +2524,73 @@ Cookie数量: {cookie_count}
             except Exception as e:
                 logger.error(f"获取所有AI回复设置失败: {e}")
                 return {}
+
+    # -------------------- AI配置预设操作 --------------------
+    def save_ai_config_preset(self, user_id: int, preset_name: str, model_name: str, api_key: str = '', base_url: str = '') -> int:
+        """保存AI配置预设（存在则更新）"""
+        with self.lock:
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute('''
+                INSERT INTO ai_config_presets (user_id, preset_name, model_name, api_key, base_url, updated_at)
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(user_id, preset_name) DO UPDATE SET
+                    model_name = excluded.model_name,
+                    api_key = excluded.api_key,
+                    base_url = excluded.base_url,
+                    updated_at = CURRENT_TIMESTAMP
+                ''', (user_id, preset_name, model_name, api_key, base_url))
+                self.conn.commit()
+                preset_id = cursor.lastrowid
+                logger.debug(f"保存AI配置预设: user_id={user_id}, preset_name={preset_name}")
+                return preset_id
+            except Exception as e:
+                logger.error(f"保存AI配置预设失败: {e}")
+                raise
+
+    def get_ai_config_presets(self, user_id: int) -> list:
+        """获取用户的所有AI配置预设"""
+        with self.lock:
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute('''
+                SELECT id, preset_name, model_name, api_key, base_url, created_at, updated_at
+                FROM ai_config_presets
+                WHERE user_id = ?
+                ORDER BY updated_at DESC
+                ''', (user_id,))
+                presets = []
+                for row in cursor.fetchall():
+                    presets.append({
+                        'id': row[0],
+                        'preset_name': row[1],
+                        'model_name': row[2],
+                        'api_key': row[3],
+                        'base_url': row[4],
+                        'created_at': row[5],
+                        'updated_at': row[6]
+                    })
+                return presets
+            except Exception as e:
+                logger.error(f"获取AI配置预设失败: {e}")
+                return []
+
+    def delete_ai_config_preset(self, user_id: int, preset_id: int) -> bool:
+        """删除AI配置预设（带user_id校验）"""
+        with self.lock:
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute('''
+                DELETE FROM ai_config_presets WHERE id = ? AND user_id = ?
+                ''', (preset_id, user_id))
+                self.conn.commit()
+                deleted = cursor.rowcount > 0
+                if deleted:
+                    logger.debug(f"删除AI配置预设: preset_id={preset_id}, user_id={user_id}")
+                return deleted
+            except Exception as e:
+                logger.error(f"删除AI配置预设失败: {e}")
+                return False
 
     # -------------------- 默认回复操作 --------------------
     def save_default_reply(self, cookie_id: str, enabled: bool, reply_content: str = None, reply_once: bool = False):

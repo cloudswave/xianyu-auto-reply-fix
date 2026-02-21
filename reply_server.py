@@ -5931,6 +5931,13 @@ class AIReplySettings(BaseModel):
     custom_prompts: str = ""
 
 
+class AIConfigPreset(BaseModel):
+    preset_name: str
+    model_name: str
+    api_key: str = ""
+    base_url: str = ""
+
+
 @app.delete("/items/batch")
 def batch_delete_items(
     request: BatchDeleteRequest,
@@ -6031,6 +6038,70 @@ def get_all_ai_reply_settings(current_user: Dict[str, Any] = Depends(get_current
         return user_settings
     except Exception as e:
         logger.error(f"获取所有AI回复设置异常: {e}")
+        raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
+
+
+@app.get("/ai-config-presets")
+def list_ai_config_presets(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """获取当前用户的AI配置预设列表"""
+    try:
+        user_id = current_user['user_id']
+        from db_manager import db_manager
+        presets = db_manager.get_ai_config_presets(user_id)
+        return presets
+    except Exception as e:
+        logger.error(f"获取AI配置预设列表异常: {e}")
+        raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
+
+
+@app.post("/ai-config-presets")
+def save_ai_config_preset(
+    preset: AIConfigPreset,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """创建或更新AI配置预设"""
+    try:
+        user_id = current_user['user_id']
+        from db_manager import db_manager
+
+        # 检查预设数量上限
+        existing = db_manager.get_ai_config_presets(user_id)
+        existing_names = [p['preset_name'] for p in existing]
+        if preset.preset_name not in existing_names and len(existing) >= 20:
+            raise HTTPException(status_code=400, detail="预设数量已达上限（最多20个）")
+
+        preset_id = db_manager.save_ai_config_preset(
+            user_id=user_id,
+            preset_name=preset.preset_name,
+            model_name=preset.model_name,
+            api_key=preset.api_key,
+            base_url=preset.base_url
+        )
+        return {"message": "预设保存成功", "preset_id": preset_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"保存AI配置预设异常: {e}")
+        raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
+
+
+@app.delete("/ai-config-presets/{preset_id}")
+def delete_ai_config_preset(
+    preset_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """删除AI配置预设"""
+    try:
+        user_id = current_user['user_id']
+        from db_manager import db_manager
+        deleted = db_manager.delete_ai_config_preset(user_id, preset_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="预设不存在或无权删除")
+        return {"message": "预设删除成功"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"删除AI配置预设异常: {e}")
         raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
 
 

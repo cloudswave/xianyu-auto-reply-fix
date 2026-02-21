@@ -3365,6 +3365,7 @@ async function configAIReply(accountId) {
 
     // 切换设置显示状态
     toggleAIReplySettings();
+    await loadAIPresets();
 
     // 显示模态框
     const modal = new bootstrap.Modal(document.getElementById('aiReplyConfigModal'));
@@ -3538,6 +3539,141 @@ function toggleCustomModelInput() {
     } else {
     customModelInput.style.display = 'none';
     customModelInput.value = '';
+    }
+}
+
+// -------------------- AI配置预设功能 --------------------
+
+let _aiPresets = []; // 缓存预设数据，避免依赖 option dataset
+
+async function loadAIPresets() {
+    try {
+        const presets = await fetchJSON(`${apiBase}/ai-config-presets`);
+        _aiPresets = presets || [];
+        const select = document.getElementById('aiPresetSelect');
+        const deleteBtn = document.getElementById('deletePresetBtn');
+        select.innerHTML = '<option value="">-- 选择预设 --</option>';
+        _aiPresets.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = p.preset_name;
+            select.appendChild(opt);
+        });
+        // 尝试自动匹配当前表单值对应的预设
+        _autoSelectMatchingPreset();
+        deleteBtn.style.display = select.value ? '' : 'none';
+    } catch (e) {
+        console.error('加载AI配置预设失败:', e);
+    }
+}
+
+function _autoSelectMatchingPreset() {
+    const select = document.getElementById('aiPresetSelect');
+    const modelSelect = document.getElementById('aiModelName');
+    const customModelInput = document.getElementById('customModelName');
+    const curModel = modelSelect.value === 'custom' ? customModelInput.value : modelSelect.value;
+    const curKey = document.getElementById('aiApiKey').value;
+    const curUrl = document.getElementById('aiBaseUrl').value;
+
+    const match = _aiPresets.find(p =>
+        p.model_name === curModel && p.api_key === curKey && p.base_url === curUrl
+    );
+    select.value = match ? match.id : '';
+}
+
+function loadAIPreset() {
+    const select = document.getElementById('aiPresetSelect');
+    const deleteBtn = document.getElementById('deletePresetBtn');
+    const presetId = select.value;
+
+    if (!presetId) {
+        deleteBtn.style.display = 'none';
+        return;
+    }
+    deleteBtn.style.display = '';
+
+    const preset = _aiPresets.find(p => String(p.id) === presetId);
+    if (!preset) return;
+
+    // 填充模型
+    const modelSelect = document.getElementById('aiModelName');
+    const customModelInput = document.getElementById('customModelName');
+    const builtinModels = Array.from(modelSelect.options).map(o => o.value).filter(v => v && v !== 'custom');
+    if (builtinModels.includes(preset.model_name)) {
+        modelSelect.value = preset.model_name;
+        customModelInput.style.display = 'none';
+        customModelInput.value = '';
+    } else {
+        modelSelect.value = 'custom';
+        customModelInput.style.display = 'block';
+        customModelInput.value = preset.model_name;
+    }
+
+    document.getElementById('aiBaseUrl').value = preset.base_url;
+    document.getElementById('aiApiKey').value = preset.api_key;
+
+    showToast(`已切换到预设「${preset.preset_name}」`, 'success');
+}
+
+async function saveCurrentAsPreset() {
+    const name = prompt('请输入预设名称：');
+    if (!name || !name.trim()) return;
+
+    const modelSelect = document.getElementById('aiModelName');
+    const customModelInput = document.getElementById('customModelName');
+    const modelName = modelSelect.value === 'custom' ? customModelInput.value : modelSelect.value;
+    const apiKey = document.getElementById('aiApiKey').value;
+    const baseUrl = document.getElementById('aiBaseUrl').value;
+
+    if (!modelName) {
+        showToast('请先选择或输入模型名称', 'warning');
+        return;
+    }
+
+    try {
+        await fetchJSON(`${apiBase}/ai-config-presets`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                preset_name: name.trim(),
+                model_name: modelName,
+                api_key: apiKey,
+                base_url: baseUrl
+            })
+        });
+        showToast('预设保存成功', 'success');
+        await loadAIPresets();
+        // 自动选中刚保存的预设
+        const select = document.getElementById('aiPresetSelect');
+        const saved = _aiPresets.find(p => p.preset_name === name.trim());
+        if (saved) {
+            select.value = saved.id;
+            document.getElementById('deletePresetBtn').style.display = '';
+        }
+    } catch (e) {
+        console.error('保存预设失败:', e);
+        showToast('保存预设失败', 'danger');
+    }
+}
+
+async function deleteSelectedPreset() {
+    const select = document.getElementById('aiPresetSelect');
+    const presetId = select.value;
+    if (!presetId) return;
+
+    const preset = _aiPresets.find(p => String(p.id) === presetId);
+    if (!preset) return;
+    if (!confirm(`确定删除预设「${preset.preset_name}」吗？`)) return;
+
+    try {
+        await fetchJSON(`${apiBase}/ai-config-presets/${presetId}`, {
+            method: 'DELETE'
+        });
+        showToast('预设已删除', 'success');
+        await loadAIPresets();
+    } catch (e) {
+        console.error('删除预设失败:', e);
+        showToast('删除预设失败', 'danger');
     }
 }
 

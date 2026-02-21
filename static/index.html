@@ -3955,6 +3955,18 @@
                 </div>
 
                 <div id="aiReplySettings" style="display: none;">
+                  <div class="row mb-3 align-items-end">
+                    <div class="col">
+                      <label class="form-label">API配置预设</label>
+                      <div class="d-flex gap-2">
+                        <select class="form-select" id="aiPresetSelect" onchange="loadAIPreset()">
+                          <option value="">-- 选择预设 --</option>
+                        </select>
+                        <button type="button" class="btn btn-outline-primary btn-sm text-nowrap" onclick="saveCurrentAsPreset()">保存预设</button>
+                        <button type="button" class="btn btn-outline-danger btn-sm text-nowrap" id="deletePresetBtn" style="display:none;" onclick="deleteSelectedPreset()">删除</button>
+                      </div>
+                    </div>
+                  </div>
                   <div class="row mb-3">
                     <div class="col-md-6">
                       <label for="aiModelName" class="form-label">AI模型</label>
