@@ -241,21 +241,20 @@ xianyu-auto-reply/
 **⚡ 最快部署方式（推荐）**：使用预构建镜像，无需下载源码，一条命令即可启动！
 
 ### 方式一：Docker 一键部署（最简单）⭐
-
-<details>
-<summary>暂未测试</summary>
-**国内用户（阿里云镜像，推荐）**：
-```bash
 # 1. 创建数据目录
+```
 mkdir -p xianyu-auto-reply
+```
 
 # 2. 一键启动容器（支持AMD64/ARM64，自动选择架构）
+```
 docker run -d \
-  -p 8080:8080 \
+  -p 8080:8090 \
   --restart always \
   -v $PWD/xianyu-auto-reply/:/app/data/ \
   --name xianyu-auto-reply \
-  registry.cn-shanghai.aliyuncs.com/zhinian-software/xianyu-auto-reply:latest
+  registry.cn-beijing.aliyuncs.com/ethanzhu/xianyu-auto-reply-fix:latest
+```
 
 # 3. 访问系统
 # http://localhost:8080
@@ -265,11 +264,11 @@ docker run -d \
 ```bash
 # 使用Docker Hub国际镜像
 docker run -d \
-  -p 8080:8080 \
+  -p 8080:8090 \
   --restart always \
   -v $PWD/xianyu-auto-reply/:/app/data/ \
   --name xianyu-auto-reply \
-  zhinianblog/xianyu-auto-reply:latest
+  ethanzhu/xianyu-auto-reply-fix:latest
 ```
 
 **Windows用户**：
@@ -278,21 +277,21 @@ docker run -d \
 mkdir xianyu-auto-reply
 
 # 国内用户（阿里云）
-docker run -d -p 8080:8080 --restart always -v %cd%/xianyu-auto-reply/:/app/data/ --name xianyu-auto-reply registry.cn-shanghai.aliyuncs.com/zhinian-software/xianyu-auto-reply:latest
+docker run -d -p 8080:8090 --restart always -v %cd%/xianyu-auto-reply/:/app/data/ --name xianyu-auto-reply registry.cn-beijing.aliyuncs.com/ethanzhu/xianyu-auto-reply-fix:latest
 
 # 国际用户（Docker Hub）
-docker run -d -p 8080:8080 --restart always -v %cd%/xianyu-auto-reply/:/app/data/ --name xianyu-auto-reply zhinianblog/xianyu-auto-reply:latest
+docker run -d -p 8080:8090 --restart always -v %cd%/xianyu-auto-reply/:/app/data/ --name xianyu-auto-reply ethanzhu/xianyu-auto-reply-fix:latest
 ```
 
 **ARM64服务器** (Oracle Cloud, AWS Graviton等)：
 ```bash
 # Docker会自动选择ARM64镜像，无需特殊配置
 docker run -d \
-  -p 8080:8080 \
+  -p 8080:8090 \
   --restart always \
   -v $PWD/xianyu-auto-reply/:/app/data/ \
   --name xianyu-auto-reply \
-  registry.cn-shanghai.aliyuncs.com/zhinian-software/xianyu-auto-reply:latest
+  registry.cn-beijing.aliyuncs.com/ethanzhu/xianyu-auto-reply-fix:latest
 ```
 
 ### 方式二：从源码构建部署
@@ -357,7 +356,7 @@ playwright install-deps chromium  # Linux需要
 python Start.py
 
 # 6. 访问系统
-# http://localhost:8080
+# http://localhost:8090
 ```
 
 ### 📋 环境要求
