@@ -8,7 +8,7 @@ on:
       - 'Dockerfile'
   pull_request:
     branches:
-      - master
+      - main
   release:
     types: [published]
 
