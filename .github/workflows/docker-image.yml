@@ -11,6 +11,15 @@ on:
       - main
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: '部署'
+        required: true
+        default: 'staging'
+      version:
+        description: '版本号'
+        required: false
 
 jobs:
   build-and-push-docker-image:
