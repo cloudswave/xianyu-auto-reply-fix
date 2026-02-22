@@ -4,7 +4,7 @@ name: Build and Push Multi-Arch Docker Images
 on:
   push:
     paths:
-      - 'src/**'
+      - '*.py'
       - 'Dockerfile'
   pull_request:
     branches:
