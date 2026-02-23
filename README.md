@@ -197,6 +197,10 @@ xianyu-auto-reply/
 </details>
 
 ## 🆕 最新更新
+### 2026年2月
+- ✅ 支持通过自动发货规则备注(包含"立即确认"关键词)来判断是否立即确认发货，避免误发货
+- ✅ 自动发货首先根据多规格精准匹配，如果匹配不到则兜底匹配，按关键字长度降序排列，优先匹配更精确的规则
+- ✅ 使用GitHub自动构建docker镜像
 
 ### 2025年1月更新
 
@@ -330,7 +334,6 @@ docker-compose up -d --build
 # 中国版（推荐）
 docker-compose -f docker-compose-cn.yml up -d --build
 ```
-</details>
 
 ### 方式三：本地开发部署
 
